@@ -1,0 +1,38 @@
+
+> whatsapp-flow-builder@0.1.0 build
+> next build
+
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Environments: .env
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 1397.0ms
+   Running TypeScript ...
+   Collecting page data ...
+   Generating static pages (0/11) ...
+   Generating static pages (2/11) 
+   Generating static pages (5/11) 
+   Generating static pages (8/11) 
+ ✓ Generating static pages (11/11) in 373.8ms
+   Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/flows
+├ ƒ /api/flows/[id]
+├ ƒ /api/runtime/continue
+├ ƒ /api/runtime/start
+├ ƒ /api/sessions
+├ ƒ /api/sessions/[id]
+├ ƒ /api/sessions/[id]/answers
+├ ƒ /api/sessions/[id]/send-email
+├ ƒ /api/webhook
+├ ○ /flow-builder-demo
+├ ○ /flows
+└ ƒ /flows/[id]
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
