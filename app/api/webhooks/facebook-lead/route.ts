@@ -177,8 +177,15 @@ async function executeFlowForLead(flowId: string, phoneNumber: string, leadData:
 
     if (!flow) return;
 
-    const engine = new FlowEngine(context, flow.steps, flow.connections);
-    const actions = await engine.start();
+    // Find the start node
+    const startNode = flow.steps.find((s: any) => s.type === "start");
+    if (!startNode) {
+      console.error("No start node found in flow");
+      return;
+    }
+
+    const engine = new FlowEngine(flow, context.sessionId, context.variables);
+    const actions = await engine.executeFromStep(startNode.id);
 
     for (const action of actions) {
       if (action.type === "send_whatsapp") {

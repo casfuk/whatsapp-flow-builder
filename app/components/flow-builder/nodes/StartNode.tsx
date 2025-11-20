@@ -36,14 +36,14 @@ export function StartNode({ data, selected, id }: NodeProps) {
       return (
         <div className="space-y-1">
           <p className="text-sm text-white/90 font-medium">{typeLabel}</p>
-          {trigger.phoneKeyword && (
+          {(trigger as any).phoneKeyword && (
             <p className="text-sm text-white/80">
-              Se activa cuando el mensaje contiene la palabra "<span className="font-semibold">{trigger.phoneKeyword}</span>"
+              Se activa cuando el mensaje contiene la palabra "<span className="font-semibold">{(trigger as any).phoneKeyword}</span>"
             </p>
           )}
-          {trigger.channelId && (
+          {(trigger as any).channelId && (
             <p className="text-sm text-white/80">
-              Dispositivo: {trigger.channelId}
+              Dispositivo: {(trigger as any).channelId}
             </p>
           )}
         </div>
@@ -54,8 +54,8 @@ export function StartNode({ data, selected, id }: NodeProps) {
       return (
         <div className="space-y-1">
           <p className="text-sm text-white/90 font-medium">{typeLabel}</p>
-          {trigger.phoneKeyword && (
-            <p className="text-sm text-white/80">Tag: {trigger.phoneKeyword}</p>
+          {(trigger as any).phoneKeyword && (
+            <p className="text-sm text-white/80">Tag: {(trigger as any).phoneKeyword}</p>
           )}
         </div>
       );

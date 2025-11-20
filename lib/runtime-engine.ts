@@ -432,3 +432,6 @@ export class RuntimeEngine {
     });
   }
 }
+
+// Export alias for backward compatibility
+export { RuntimeEngine as FlowEngine };

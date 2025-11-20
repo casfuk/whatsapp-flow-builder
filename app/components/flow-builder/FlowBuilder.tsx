@@ -30,7 +30,7 @@ import { PlaceholderNode } from "./nodes/PlaceholderNode";
 import { StartAutomationNode } from "./nodes/StartAutomationNode";
 import { RotatorNode } from "./nodes/RotatorNode";
 import { AssignConversationNode } from "./nodes/AssignConversationNode";
-import { validateFlow, ValidationResult } from "@/lib/utils/flowValidation";
+import { validateFlow, ValidationResult, ValidationError } from "@/lib/utils/flowValidation";
 
 const nodeTypes: NodeTypes = {
   start: StartNode,
@@ -182,7 +182,7 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       };
 
       // Special data for specific node types
-      let nodeData = baseData;
+      let nodeData: any = baseData;
       if (newNodeType === "multipleChoice") {
         nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
       } else if (newNodeType === "send_message") {
@@ -418,7 +418,7 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     };
 
     // Special data for specific node types
-    let nodeData = baseData;
+    let nodeData: any = baseData;
     if (type === "multipleChoice") {
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (type === "send_message") {
@@ -438,7 +438,6 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       data: nodeData,
     };
     setNodes((nds) => [...nds, newNode]);
-    setShowAddNodeModal(false); // Close modal after adding node
   };
 
   const handleAddNode = useCallback((nodeType: string) => {
@@ -465,7 +464,7 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     };
 
     // Special data for specific node types
-    let nodeData = baseData;
+    let nodeData: any = baseData;
     if (nodeType === "multipleChoice") {
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (nodeType === "send_message") {
@@ -491,7 +490,6 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       target: newId,
     }));
 
-    setShowAddNodeModal(false);
   }, [selectedNode, handleUpdateNode, handleDescriptionChange, handleWaitConfigChange, handleQuestionChange, handleConditionsChange, handleDeleteNode, handleDuplicateNode, setNodes, setEdges]);
 
   const onConnectEnd: OnConnectEnd = useCallback(
@@ -561,7 +559,7 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     };
 
     // Special data for specific node types
-    let nodeData = baseData;
+    let nodeData: any = baseData;
     if (type === "multipleChoice") {
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (type === "send_message") {
@@ -589,10 +587,10 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
         ...eds,
         {
           id: `${addMenu.fromNode}-${newId}`,
-          source: addMenu.fromNode,
+          source: addMenu.fromNode!,
           target: newId,
           sourceHandle: addMenu.fromHandle,
-        },
+        } as Edge,
       ]);
     }
 

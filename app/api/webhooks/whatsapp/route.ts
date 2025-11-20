@@ -140,15 +140,18 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
       return;
     }
 
+    // Find the start node
+    const startNode = flow.steps.find((s: any) => s.type === "start");
+    if (!startNode) {
+      console.error("No start node found in flow");
+      return;
+    }
+
     // Initialize engine
-    const engine = new FlowEngine(
-      context,
-      flow.steps,
-      flow.connections
-    );
+    const engine = new FlowEngine(flow, context.sessionId, context.variables);
 
     // Execute flow from start
-    const actions = await engine.start();
+    const actions = await engine.executeFromStep(startNode.id);
 
     // Process actions
     for (const action of actions) {

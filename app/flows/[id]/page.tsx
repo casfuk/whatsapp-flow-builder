@@ -16,7 +16,7 @@ const FlowBuilder = dynamic(
 export default function EditFlowPage() {
   const router = useRouter();
   const params = useParams();
-  const flowId = params.id as string;
+  const flowId = params?.id as string;
   const flowBuilderRef = useRef<FlowBuilderRef>(null);
 
   const [flowName, setFlowName] = useState("");
