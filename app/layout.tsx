@@ -32,3 +32,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+// Note: Zustand doesn't require provider wrapper - useGlobal can be used directly in any 'use client' component

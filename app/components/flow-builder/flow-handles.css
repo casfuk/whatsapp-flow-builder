@@ -1,0 +1,43 @@
+/* base circle look */
+.react-flow__handle.node-handle {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid #C9D2FF;  /* light lilac outline */
+  background: #ffffff;
+  box-shadow: 0 0 0 2px #f5f6ff; /* subtle outer ring */
+  transition: transform 0.12s ease-out, border-color 0.12s ease-out,
+              box-shadow 0.12s ease-out;
+}
+
+/* bigger hit area so hover feels easier */
+.react-flow__handle.node-handle::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+/* hover / active state */
+.react-flow__handle.node-handle:hover {
+  transform: scale(1.25);
+  border-color: #7C5CFF;        /* stronger purple */
+  box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.25);
+}
+
+/* when connecting */
+.react-flow__handle.node-handle.connecting {
+  border-color: #4a3bff;
+  box-shadow: 0 0 0 3px rgba(74, 59, 255, 0.35);
+}
+
+/* connection line a bit clearer */
+.react-flow__edge-path {
+  stroke-width: 2;
+  stroke: #c5c9de;
+}
+
+/* error nodes highlighting */
+.flow-node-error > div {
+  border-color: #f87171 !important; /* red border */
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.6), 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}

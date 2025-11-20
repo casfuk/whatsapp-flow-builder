@@ -1,0 +1,239 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Flow {
+  id          String   @id @default(cuid())
+  name        String
+  key         String   @unique
+  description String?
+  isActive    Boolean  @default(false)
+  startStepId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps       FlowStep[]
+  connections FlowConnection[]
+  answers     FormAnswer[]
+
+  @@index([key])
+}
+
+model FlowStep {
+  id        String @id @default(cuid())
+  flowId    String
+  type      String
+  label     String
+  configJson String @default("{}")
+  positionX Int    @default(0)
+  positionY Int    @default(0)
+
+  flow            Flow             @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  connectionsFrom FlowConnection[] @relation("FromStep")
+  connectionsTo   FlowConnection[] @relation("ToStep")
+
+  @@index([flowId])
+}
+
+model FlowConnection {
+  id             String  @id @default(cuid())
+  flowId         String
+  fromStepId     String
+  toStepId       String
+  conditionLabel String?
+  sourceHandle   String? // For multiple choice nodes: the option ID that leads to this connection
+
+  flow     Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  fromStep FlowStep @relation("FromStep", fields: [fromStepId], references: [id], onDelete: Cascade)
+  toStep   FlowStep @relation("ToStep", fields: [toStepId], references: [id], onDelete: Cascade)
+
+  @@index([flowId])
+  @@index([fromStepId])
+  @@index([toStepId])
+}
+
+model FormAnswer {
+  id          String   @id @default(cuid())
+  flowId      String
+  sessionId   String
+  answersJson String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@index([flowId])
+  @@index([sessionId])
+}
+
+model SessionState {
+  id              String   @id @default(cuid())
+  sessionId       String   @unique
+  flowId          String
+  currentStepId   String?
+  variablesJson   String   @default("{}")
+  status          String   @default("active") // active, completed, stopped
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([sessionId])
+  @@index([flowId])
+}
+
+model DebugAction {
+  id          String   @id @default(cuid())
+  sessionId   String
+  actionType  String
+  actionData  String
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
+}
+
+model Device {
+  id                     String   @id @default(cuid())
+  name                   String
+  color                  String   @default("#6D5BFA")
+  whatsappPhoneNumberId  String?
+  phoneNumber            String?
+  isConnected            Boolean  @default(false)
+  accessToken            String?
+  businessAccountId      String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([isConnected])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#6D5BFA")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Contact {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique
+  name        String?
+  email       String?
+  profilePic  String?
+  source      String   @default("manual") // whatsapp, form, manual
+  tags        String   @default("[]") // JSON array of tag IDs
+  metadata    String   @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([phoneNumber])
+  @@index([source])
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  name        String?
+  phone       String   @unique
+  email       String?
+  metadata    String   @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([phone])
+}
+
+model MessageLog {
+  id          String   @id @default(cuid())
+  phone       String
+  message     String
+  status      String   @default("pending") // pending, sent, failed
+  createdAt   DateTime @default(now())
+
+  @@index([phone])
+  @@index([createdAt])
+}
+
+model FacebookAccount {
+  id              String   @id @default(cuid())
+  userId          String?
+  facebookUserId  String   @unique
+  accessToken     String
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model FacebookPageConnection {
+  id              String   @id @default(cuid())
+  workspaceId     String?
+  pageId          String   @unique
+  pageName        String
+  pageAccessToken String
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([isDefault])
+}
+
+model Settings {
+  id             Int     @id @default(1)
+  whatsappNumber String?
+  defaultAgent   String?
+}
+
+model WhatsAppConfig {
+  id            String   @id @default(cuid())
+  workspaceId   String?
+  mode          String   // "cloud_api" | "qr_session"
+  phoneNumber   String?
+  phoneNumberId String?  // For cloud_api
+  wabaId        String?  // For cloud_api
+  accessToken   String?  // For cloud_api
+  sessionId     String?  // For qr_session
+  sessionState  String?  // For qr_session
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([mode])
+}
+
+model CustomField {
+  id        String   @id @default(cuid())
+  name      String
+  key       String   @unique // Slugified version of name for programmatic access
+  type      String   @default("text") // text, number, date, url
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  values ContactCustomFieldValue[]
+
+  @@index([key])
+}
+
+model ContactCustomFieldValue {
+  id            String   @id @default(cuid())
+  contactId     String
+  customFieldId String
+  value         String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, customFieldId])
+  @@index([contactId])
+  @@index([customFieldId])
+}
