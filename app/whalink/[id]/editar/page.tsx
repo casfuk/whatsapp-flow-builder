@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { SidebarLayout } from "@/app/components/SidebarLayout";
 
 interface Device {
@@ -11,8 +11,11 @@ interface Device {
   isConnected: boolean;
 }
 
-export default function EditarWhalinkPage({ params }: { params: { id: string } }) {
+export default function EditarWhalinkPage() {
   const router = useRouter();
+  const params = useParams();
+  const whalinkId = params?.id as string;
+
   const [activeTab, setActiveTab] = useState<"general" | "advanced">("general");
   const [devices, setDevices] = useState<Device[]>([]);
   const [formData, setFormData] = useState({
@@ -29,9 +32,11 @@ export default function EditarWhalinkPage({ params }: { params: { id: string } }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDevices();
-    loadWhalink();
-  }, []);
+    if (whalinkId) {
+      loadDevices();
+      loadWhalink();
+    }
+  }, [whalinkId]);
 
   const loadDevices = async () => {
     try {
@@ -45,7 +50,7 @@ export default function EditarWhalinkPage({ params }: { params: { id: string } }
 
   const loadWhalink = async () => {
     try {
-      const res = await fetch(`/api/whalinks/${params.id}`);
+      const res = await fetch(`/api/whalinks/${whalinkId}`);
       if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
       setFormData({
@@ -72,7 +77,7 @@ export default function EditarWhalinkPage({ params }: { params: { id: string } }
     setSaving(true);
 
     try {
-      const res = await fetch(`/api/whalinks/${params.id}`, {
+      const res = await fetch(`/api/whalinks/${whalinkId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

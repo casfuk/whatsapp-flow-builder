@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { SidebarLayout } from "@/app/components/SidebarLayout";
 
 interface Whalink {
@@ -19,18 +19,23 @@ interface Whalink {
   createdAt: string;
 }
 
-export default function ViewWhalinkPage({ params }: { params: { id: string } }) {
+export default function ViewWhalinkPage() {
   const router = useRouter();
+  const params = useParams();
+  const whalinkId = params?.id as string;
+
   const [whalink, setWhalink] = useState<Whalink | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadWhalink();
-  }, []);
+    if (whalinkId) {
+      loadWhalink();
+    }
+  }, [whalinkId]);
 
   const loadWhalink = async () => {
     try {
-      const res = await fetch(`/api/whalinks/${params.id}`);
+      const res = await fetch(`/api/whalinks/${whalinkId}`);
       if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
       setWhalink(data);
