@@ -11,7 +11,7 @@ interface Device {
   isConnected: boolean;
 }
 
-export default function CrearWhalinkPage() {
+export default function EditarWhalinkPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"general" | "advanced">("general");
   const [devices, setDevices] = useState<Device[]>([]);
@@ -26,9 +26,11 @@ export default function CrearWhalinkPage() {
     trackingPixel: "",
   });
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadDevices();
+    loadWhalink();
   }, []);
 
   const loadDevices = async () => {
@@ -36,15 +38,32 @@ export default function CrearWhalinkPage() {
       const res = await fetch("/api/devices");
       const data = await res.json();
       setDevices(data);
-
-      // Set default device (first one or get from settings)
-      if (data.length > 0) {
-        // Try to get default from settings or use first device
-        const defaultDevice = data.find((d: Device) => d.phoneNumber === "+34621072186") || data[0];
-        setFormData((prev) => ({ ...prev, deviceId: defaultDevice.id }));
-      }
     } catch (error) {
       console.error("Failed to load devices:", error);
+    }
+  };
+
+  const loadWhalink = async () => {
+    try {
+      const res = await fetch(`/api/whalinks/${params.id}`);
+      if (!res.ok) throw new Error("Failed to load");
+      const data = await res.json();
+      setFormData({
+        name: data.name,
+        deviceId: data.deviceId,
+        presetMessage: data.presetMessage,
+        image: data.image || "",
+        description: data.description || "",
+        emailKey: data.emailKey || "",
+        nameKey: data.nameKey || "",
+        trackingPixel: data.trackingPixel || "",
+      });
+    } catch (error) {
+      console.error("Failed to load whalink:", error);
+      alert("Error al cargar el whalink");
+      router.push("/whalink");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -53,24 +72,26 @@ export default function CrearWhalinkPage() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/whalinks", {
-        method: "POST",
+      const res = await fetch(`/api/whalinks/${params.id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "Failed to create link");
+        throw new Error(error.error || "Failed to update link");
       }
 
       router.push("/whalink");
     } catch (error: any) {
-      alert(error.message || "Error al crear el link");
+      alert(error.message || "Error al actualizar el link");
     } finally {
       setSaving(false);
     }
   };
+
+  if (loading) return <SidebarLayout><div className="p-8">Cargando...</div></SidebarLayout>;
 
   const nameLength = formData.name.length;
   const messageLength = formData.presetMessage.length;
@@ -79,8 +100,8 @@ export default function CrearWhalinkPage() {
     <SidebarLayout>
       <div className="p-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Crear nuevo link</h1>
-          <p className="text-gray-600 mt-1">Configura tu enlace de WhatsApp</p>
+          <h1 className="text-3xl font-bold text-gray-900">Editar link</h1>
+          <p className="text-gray-600 mt-1">Modifica tu enlace de WhatsApp</p>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -182,7 +203,6 @@ export default function CrearWhalinkPage() {
                   <p className="text-sm font-medium text-gray-700 mb-3">Vista previa</p>
                   <div className="bg-gradient-to-b from-[#075E54] to-[#128C7E] rounded-3xl p-4 shadow-xl">
                     <div className="bg-white rounded-2xl p-4 min-h-[400px] flex flex-col">
-                      {/* Phone Header */}
                       <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
                         <div className="w-10 h-10 rounded-full bg-gray-300"></div>
                         <div className="flex-1">
@@ -192,8 +212,6 @@ export default function CrearWhalinkPage() {
                           <p className="text-xs text-green-600">En línea</p>
                         </div>
                       </div>
-
-                      {/* Message */}
                       <div className="flex-1 flex items-end py-4">
                         {formData.presetMessage && (
                           <div className="bg-[#E7FFDB] rounded-lg rounded-bl-none px-3 py-2 max-w-[85%]">
@@ -284,7 +302,7 @@ export default function CrearWhalinkPage() {
               disabled={saving}
               className="px-6 py-2.5 bg-[#6D5BFA] text-white rounded-xl hover:bg-[#5B4BD8] transition-colors font-medium disabled:opacity-50"
             >
-              {saving ? "Creando..." : "Crear link"}
+              {saving ? "Guardando..." : "Guardar cambios"}
             </button>
           </div>
         </form>

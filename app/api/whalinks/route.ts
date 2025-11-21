@@ -53,8 +53,8 @@ export async function POST(request: NextRequest) {
       attempts++;
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://wha.link";
-    const fullUrl = `${baseUrl}/${slug}`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const fullUrl = `${baseUrl}/api/redirect/${slug}`;
 
     const whalink = await prisma.whalink.create({
       data: {
