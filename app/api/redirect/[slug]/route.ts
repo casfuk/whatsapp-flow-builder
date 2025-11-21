@@ -32,7 +32,7 @@ export async function GET(
     const encodedMessage = encodeURIComponent(whalink.presetMessage);
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMessage}`;
 
-    console.log(`[WhaLink Redirect] ${params.slug} → ${whatsappUrl}`);
+    console.log(`[WhaLink Redirect] ${slug} → ${whatsappUrl}`);
 
     // Redirect
     return NextResponse.redirect(whatsappUrl);
