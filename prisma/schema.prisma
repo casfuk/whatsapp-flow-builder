@@ -258,3 +258,30 @@ model Whalink {
   @@index([slug])
   @@index([deviceId])
 }
+
+model MassSend {
+  id             String   @id @default(cuid())
+  name           String   // Title of the broadcast
+  deviceId       String   // WhatsApp device ID
+  body           String   // Message text with merge tags
+  mediaType      String   @default("NONE") // IMAGE, VIDEO, NONE
+  mediaUrl       String?
+  includeTags    String   @default("[]") // JSON array of tag IDs to include
+  excludeTags    String   @default("[]") // JSON array of tag IDs to exclude
+  contactsFrom   DateTime?
+  contactsTo     DateTime?
+  sendOption     String   @default("SCHEDULED") // NOW, SCHEDULED
+  scheduledAt    DateTime?
+  speed          String   @default("SLOW") // SLOW, MEDIUM, FAST
+  timezone       String   @default("Europe/Madrid")
+  status         String   @default("DRAFT") // DRAFT, SCHEDULED, SENDING, COMPLETED, CANCELLED
+  totalContacts  Int      @default(0)
+  sentCount      Int      @default(0)
+  failedCount    Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([deviceId])
+  @@index([status])
+  @@index([scheduledAt])
+}
