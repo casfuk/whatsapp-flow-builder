@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 // GET: Get single whalink
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: any) {
+  const { id } = await context.params;
+
   try {
     const whalink = await prisma.whalink.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!whalink) {
@@ -20,7 +22,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT: Update whalink
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: any) {
+  const { id } = await context.params;
+
   try {
     const body = await request.json();
     const { name, deviceId, presetMessage, image, description, emailKey, nameKey, trackingPixel } = body;
@@ -35,7 +39,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const whalink = await prisma.whalink.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name: name || undefined,
         deviceId: deviceId || undefined,
@@ -56,10 +60,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE: Delete whalink
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: any) {
+  const { id } = await context.params;
+
   try {
     await prisma.whalink.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ success: true });
