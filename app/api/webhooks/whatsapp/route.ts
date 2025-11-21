@@ -209,11 +209,7 @@ export async function POST(request: NextRequest) {
         shouldTrigger = false;
       }
 
-      console.log(`[Webhook] Original shouldTrigger: ${shouldTrigger}`);
-
-      // TEMP: force trigger for debugging
-      shouldTrigger = true;
-      console.log(`[Webhook] FORCE TRIGGER ENABLED - shouldTrigger set to: ${shouldTrigger}`);
+      console.log(`[Webhook] shouldTrigger: ${shouldTrigger}`);
 
       if (shouldTrigger) {
         console.log(`[Webhook] ✓✓✓ TRIGGERING FLOW: "${flow.name}" (ID: ${flow.id}) for contact: ${from}`);
