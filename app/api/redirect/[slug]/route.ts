@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request: NextRequest, { params }: { params: { slug: string } }) {
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ slug: string }> }
+) {
+  const { slug } = await context.params;
+
   try {
     const whalink = await prisma.whalink.findUnique({
-      where: { slug: params.slug },
+      where: { slug: slug },
     });
 
     if (!whalink) {
