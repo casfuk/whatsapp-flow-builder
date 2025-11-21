@@ -23,10 +23,12 @@ export async function GET(request: NextRequest) {
 
 // POST: Handle incoming messages
 export async function POST(request: NextRequest) {
+  console.log("[Webhook] *** NEW REQUEST TO /api/webhooks/whatsapp ***");
+
   try {
     const body = await request.json();
 
-    console.log("[Webhook] Received payload:", JSON.stringify(body, null, 2));
+    console.log("[Webhook] Raw body:", JSON.stringify(body, null, 2));
 
     // WhatsApp Cloud API webhook structure
     const entry = body.entry?.[0];
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Webhook] ========================================`);
     console.log(`[Webhook] Received ${messageType} message from ${from}`);
-    console.log(`[Webhook] Message text: "${messageText}"`);
+    console.log(`[Webhook] Incoming text: "${messageText}"`);
     console.log(`[Webhook] Message text (trimmed, lowercase): "${messageText.toLowerCase().trim()}"`);
     console.log(`[Webhook] Contact name: ${contactName || 'N/A'}`);
 
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[Webhook] Contact ${from} (${contact.name || 'unnamed'}) saved/updated`);
+    console.log(`[Webhook] Contact for this event: ${contact.id}, phone: ${contact.phoneNumber}, name: ${contact.name || 'unnamed'}`);
 
     // Only process text messages for now
     if (messageType !== "text") {
@@ -207,18 +209,21 @@ export async function POST(request: NextRequest) {
         shouldTrigger = false;
       }
 
-      // TEMPORARY DEBUG: Uncomment the line below to force trigger and isolate execution logic
-      // shouldTrigger = true; // TEMP: force trigger for all message_received flows
-      // if (shouldTrigger) console.log(`[Webhook] ⚠️ FORCED TRIGGER (temporary debug mode)`);
+      console.log(`[Webhook] Original shouldTrigger: ${shouldTrigger}`);
 
-      console.log(`[Webhook] shouldTrigger = ${shouldTrigger}`);
+      // TEMP: force trigger for debugging
+      shouldTrigger = true;
+      console.log(`[Webhook] FORCE TRIGGER ENABLED - shouldTrigger set to: ${shouldTrigger}`);
 
       if (shouldTrigger) {
         console.log(`[Webhook] ✓✓✓ TRIGGERING FLOW: "${flow.name}" (ID: ${flow.id}) for contact: ${from}`);
+        console.log(`[Webhook] ➜ Calling executeFlow with flowId=${flow.id}, phone=${from}, contactId=${contact.id}`);
         triggeredCount++;
 
         // Execute the flow
         await executeFlow(flow.id, from, messageText, contact.id);
+
+        console.log(`[Webhook] ✓ Flow executed for flow ${flow.id}`);
       } else {
         console.log(`[Webhook] ✗ NOT triggering flow: "${flow.name}"`);
       }
@@ -310,24 +315,33 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
       console.log(`[Flow Execution] Processing action ${i + 1}/${actions.length}: ${action.type}`);
 
       if (action.type === "send_whatsapp") {
-        console.log(`[Flow Execution]   → Sending WhatsApp message to ${action.to}`);
-        console.log(`[Flow Execution]   → Message text: "${action.text}"`);
+        console.log(`[Flow Execution]   → send_whatsapp action`);
+        console.log(`[Flow Execution]   → To: ${action.to}`);
+        console.log(`[Flow Execution]   → Text: "${action.text}"`);
 
-        await sendWhatsAppMessage({
-          to: action.to,
-          message: action.text,
-        });
-
-        // Log the outgoing message
-        await prisma.messageLog.create({
-          data: {
-            phone: action.to,
+        try {
+          const success = await sendWhatsAppMessage({
+            to: action.to,
             message: action.text,
-            status: "sent",
-          },
-        });
+          });
 
-        console.log(`[Flow Execution]   ✓ Message sent and logged to messageLog`);
+          if (!success) {
+            console.error(`[Flow Execution]   ✗ Failed to send message (sendWhatsAppMessage returned false)`);
+          }
+
+          // Log the outgoing message
+          await prisma.messageLog.create({
+            data: {
+              phone: action.to,
+              message: action.text,
+              status: success ? "sent" : "failed",
+            },
+          });
+
+          console.log(`[Flow Execution]   ✓ Message logged to messageLog (status: ${success ? 'sent' : 'failed'})`);
+        } catch (err) {
+          console.error(`[Flow Execution]   ✗ Exception while sending WhatsApp message:`, err);
+        }
       } else if (action.type === "assign_conversation") {
         console.log(`[Flow Execution]   → Assigning conversation to: ${action.assigneeId || 'NULL'}`);
         // Assignment is already handled in the runtime engine
