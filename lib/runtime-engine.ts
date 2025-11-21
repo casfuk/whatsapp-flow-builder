@@ -127,6 +127,60 @@ export class RuntimeEngine {
         };
 
       case "assign_conversation":
+        // Resolve the assignee
+        let resolvedAssigneeId: string | null = null;
+
+        // If assignToSelf is true or agentId is null/undefined, use default agent
+        if (config.assignToSelf === true || !config.agentId) {
+          try {
+            const settings = await prisma.settings.findUnique({
+              where: { id: 1 },
+            });
+            resolvedAssigneeId = settings?.defaultAgent || null;
+
+            if (!resolvedAssigneeId) {
+              console.warn(
+                `[RuntimeEngine] No default agent configured in settings. ` +
+                `Assignment will be null for session ${this.context.sessionId}`
+              );
+            } else {
+              console.log(
+                `[RuntimeEngine] Assigning to default agent: ${resolvedAssigneeId} ` +
+                `for session ${this.context.sessionId}`
+              );
+            }
+          } catch (error) {
+            console.error(
+              `[RuntimeEngine] Failed to fetch default agent from settings:`,
+              error
+            );
+          }
+        } else {
+          // Use the specified agent ID
+          resolvedAssigneeId = config.agentId;
+          console.log(
+            `[RuntimeEngine] Assigning to specific agent: ${resolvedAssigneeId} ` +
+            `for session ${this.context.sessionId}`
+          );
+        }
+
+        // Update SessionState with the resolved assignee
+        try {
+          await prisma.sessionState.update({
+            where: { sessionId: this.context.sessionId },
+            data: { assigneeId: resolvedAssigneeId },
+          });
+          console.log(
+            `[RuntimeEngine] Successfully updated SessionState with assigneeId: ${resolvedAssigneeId}`
+          );
+        } catch (error) {
+          console.error(
+            `[RuntimeEngine] Failed to update SessionState with assigneeId:`,
+            error
+          );
+        }
+
+        // Send email notification if configured
         if (config.sendEmail) {
           const emailBody = this.buildAssignmentEmail();
           actions.push({
@@ -137,9 +191,11 @@ export class RuntimeEngine {
           });
         }
 
+        // Add assignment action
         actions.push({
-          type: "assign_to_admin",
-          admin: config.admin,
+          type: "assign_conversation",
+          assigneeId: resolvedAssigneeId,
+          sessionId: this.context.sessionId,
         });
 
         return {

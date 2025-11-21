@@ -1,89 +1,162 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { SidebarLayout } from "@/app/components/SidebarLayout";
 
-export default function WhalinkPage() {
-  const [config, setConfig] = useState({
-    apiKey: "",
-    webhookUrl: "",
-    enabled: false,
-  });
+interface Whalink {
+  id: string;
+  name: string;
+  slug: string;
+  fullUrl: string;
+  deviceId: string;
+  presetMessage: string;
+  createdAt: string;
+}
 
-  const handleSave = () => {
-    // Here you would save to backend
-    alert("Configuración guardada exitosamente");
+export default function WhalinkPage() {
+  const router = useRouter();
+  const [whalinks, setWhalinks] = useState<Whalink[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadWhalinks();
+  }, []);
+
+  const loadWhalinks = async () => {
+    try {
+      const res = await fetch("/api/whalinks");
+      const data = await res.json();
+      setWhalinks(data);
+    } catch (error) {
+      console.error("Failed to load whalinks:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Estás seguro de eliminar este link?")) return;
+
+    try {
+      await fetch(`/api/whalinks/${id}`, { method: "DELETE" });
+      loadWhalinks();
+    } catch (error) {
+      console.error("Failed to delete:", error);
+      alert("Error al eliminar el link");
+    }
+  };
+
+  const handleCopy = (url: string) => {
+    navigator.clipboard.writeText(url);
+    alert("Link copiado!");
   };
 
   return (
     <SidebarLayout>
       <div className="p-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Configuración de Whalink</h1>
-            <p className="text-gray-600 mt-1">Configura la integración con Whalink</p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Whalinks</h1>
+            <p className="text-gray-600 mt-1">Gestiona tus enlaces de WhatsApp</p>
           </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                API Key
-              </label>
-              <input
-                type="password"
-                value={config.apiKey}
-                onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
-                placeholder="Ingresa tu API Key de Whalink"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Webhook URL
-              </label>
-              <input
-                type="text"
-                value={config.webhookUrl}
-                onChange={(e) => setConfig({ ...config, webhookUrl: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
-                placeholder="https://tu-dominio.com/webhook"
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-              <div>
-                <div className="text-sm font-medium text-gray-700">
-                  Habilitar integración
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Activa o desactiva la conexión con Whalink
-                </div>
-              </div>
-              <button
-                onClick={() => setConfig({ ...config, enabled: !config.enabled })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  config.enabled ? "bg-[#6D5BFA]" : "bg-gray-300"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    config.enabled ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="pt-4">
-              <button
-                onClick={handleSave}
-                className="w-full bg-[#6D5BFA] text-white px-6 py-2.5 rounded-xl hover:bg-[#5B4BD8] transition-colors shadow-sm font-medium"
-              >
-                Guardar Configuración
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={() => router.push("/whalink/crear")}
+            className="bg-[#6D5BFA] text-white px-6 py-2.5 rounded-xl hover:bg-[#5B4BD8] transition-colors font-medium"
+          >
+            + Crear link
+          </button>
         </div>
+
+        {loading ? (
+          <div className="text-center py-12">Cargando...</div>
+        ) : whalinks.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+            <p className="text-gray-500">No hay links creados aún</p>
+            <button
+              onClick={() => router.push("/whalink/crear")}
+              className="mt-4 text-[#6D5BFA] hover:underline"
+            >
+              Crear tu primer link
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nombre
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Link
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Dispositivo
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Fecha de creación
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {whalinks.map((link) => (
+                  <tr key={link.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {link.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                      <a href={link.fullUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        {link.fullUrl}
+                      </a>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {link.deviceId}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(link.createdAt).toLocaleDateString("es-ES")}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => router.push(`/whalink/${link.id}`)}
+                          className="text-gray-600 hover:text-gray-900"
+                          title="Ver"
+                        >
+                          👁
+                        </button>
+                        <button
+                          onClick={() => router.push(`/whalink/${link.id}/editar`)}
+                          className="text-gray-600 hover:text-gray-900"
+                          title="Editar"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleCopy(link.fullUrl)}
+                          className="text-gray-600 hover:text-gray-900"
+                          title="Copiar link"
+                        >
+                          📋
+                        </button>
+                        <button
+                          onClick={() => handleDelete(link.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Eliminar"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </SidebarLayout>
   );

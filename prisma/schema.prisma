@@ -80,11 +80,13 @@ model SessionState {
   currentStepId   String?
   variablesJson   String   @default("{}")
   status          String   @default("active") // active, completed, stopped
+  assigneeId      String?  // Agent/user assigned to this conversation
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([sessionId])
   @@index([flowId])
+  @@index([assigneeId])
 }
 
 model DebugAction {
@@ -236,4 +238,23 @@ model ContactCustomFieldValue {
   @@unique([contactId, customFieldId])
   @@index([contactId])
   @@index([customFieldId])
+}
+
+model Whalink {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  fullUrl         String
+  deviceId        String
+  presetMessage   String
+  image           String?
+  description     String?
+  emailKey        String?
+  nameKey         String?
+  trackingPixel   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([slug])
+  @@index([deviceId])
 }

@@ -5,7 +5,8 @@ import { useState } from "react";
 import { NodeWrapper } from "../NodeWrapper";
 
 type AssignNodeData = {
-  agentId?: string | null; // null = "Asignarme a mí"
+  agentId?: string | null; // null or undefined = "Asignarme a mí" (assign to default agent)
+  assignToSelf?: boolean;  // Explicit flag for "assign to self"
   onChange?: (partial: Partial<AssignNodeData>) => void;
   onDuplicate?: (nodeId: string) => void;
   onDelete?: (nodeId: string) => void;
@@ -26,10 +27,14 @@ export function AssignConversationNode({
   const [agentId, setAgentId] = useState<string | null>(data.agentId ?? null);
 
   const handleAgentChange = (value: string) => {
-    const newAgentId = value === "" ? null : value;
+    const isAssignToSelf = value === "";
+    const newAgentId = isAssignToSelf ? null : value;
     setAgentId(newAgentId);
     if (data.onChange) {
-      data.onChange({ agentId: newAgentId });
+      data.onChange({
+        agentId: newAgentId,
+        assignToSelf: isAssignToSelf
+      });
     }
   };
 

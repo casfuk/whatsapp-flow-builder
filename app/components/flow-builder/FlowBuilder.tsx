@@ -186,7 +186,7 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       if (newNodeType === "multipleChoice") {
         nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
       } else if (newNodeType === "send_message") {
-        nodeData = { ...baseData, message: "" };
+        nodeData = { ...baseData, type: "text", text: "", delaySeconds: 3 };
       } else if (newNodeType === "question_simple" || newNodeType === "question_multiple") {
         nodeData = { ...baseData, questionText: "" };
       } else if (newNodeType === "wait") {
@@ -422,7 +422,7 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     if (type === "multipleChoice") {
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (type === "send_message") {
-      nodeData = { ...baseData, message: "" };
+      nodeData = { ...baseData, type: "text", text: "", delaySeconds: 3 };
     } else if (type === "question_simple" || type === "question_multiple") {
       nodeData = { ...baseData, questionText: "" };
     } else if (type === "wait") {
@@ -468,7 +468,7 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     if (nodeType === "multipleChoice") {
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (nodeType === "send_message") {
-      nodeData = { ...baseData, message: "" };
+      nodeData = { ...baseData, type: "text", text: "", delaySeconds: 3 };
     } else if (nodeType === "question_simple" || nodeType === "question_multiple") {
       nodeData = { ...baseData, questionText: "" };
     } else if (nodeType === "wait") {
@@ -563,7 +563,7 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     if (type === "multipleChoice") {
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (type === "send_message") {
-      nodeData = { ...baseData, message: "" };
+      nodeData = { ...baseData, type: "text", text: "", delaySeconds: 3 };
     } else if (type === "question_simple" || type === "question_multiple") {
       nodeData = { ...baseData, questionText: "" };
     } else if (type === "wait") {

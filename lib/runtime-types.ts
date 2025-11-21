@@ -1,5 +1,5 @@
 export interface Action {
-  type: "send_whatsapp" | "send_email" | "send_whatsapp_template" | "wait" | "assign_to_admin";
+  type: "send_whatsapp" | "send_email" | "send_whatsapp_template" | "wait" | "assign_to_admin" | "assign_conversation";
   [key: string]: any;
 }
 
@@ -34,9 +34,16 @@ export interface AssignToAdminAction extends Action {
   admin: string;
 }
 
+export interface AssignConversationAction extends Action {
+  type: "assign_conversation";
+  assigneeId: string | null;
+  sessionId: string;
+}
+
 export type FlowAction =
   | SendWhatsAppAction
   | SendEmailAction
   | SendTemplateAction
   | WaitAction
-  | AssignToAdminAction;
+  | AssignToAdminAction
+  | AssignConversationAction;
