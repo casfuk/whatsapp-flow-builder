@@ -1,30 +1,60 @@
 "use client";
 
 import { Handle, Position, NodeProps } from "reactflow";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NodeWrapper } from "../NodeWrapper";
 
 type AssignNodeData = {
-  agentId?: string | null; // null or undefined = "Asignarme a mí" (assign to default agent)
+  agentType?: "human" | "ai"; // Type of agent
+  agentId?: string | null; // Agent ID
   assignToSelf?: boolean;  // Explicit flag for "assign to self"
   onChange?: (partial: Partial<AssignNodeData>) => void;
   onDuplicate?: (nodeId: string) => void;
   onDelete?: (nodeId: string) => void;
 };
 
-// Mock agents - replace with real API data / useAgentsStore
-const MOCK_AGENTS = [
+// Mock human agents - replace with real API data / useAgentsStore
+const MOCK_HUMAN_AGENTS = [
   { id: "agent-1", name: "Juan Pérez", avatar: "👨" },
   { id: "agent-2", name: "María García", avatar: "👩" },
   { id: "agent-3", name: "Carlos López", avatar: "👨" },
 ];
+
+interface AiAgent {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+}
 
 export function AssignConversationNode({
   data,
   selected,
   id,
 }: NodeProps<AssignNodeData>) {
+  const [agentType, setAgentType] = useState<"human" | "ai">(data.agentType || "human");
   const [agentId, setAgentId] = useState<string | null>(data.agentId ?? null);
+  const [aiAgents, setAiAgents] = useState<AiAgent[]>([]);
+
+  useEffect(() => {
+    // Load AI agents from API
+    fetch("/api/ai-agents")
+      .then((res) => res.json())
+      .then((data) => setAiAgents(data.filter((a: AiAgent) => a.isActive)))
+      .catch((err) => console.error("Failed to load AI agents:", err));
+  }, []);
+
+  const handleTypeChange = (type: "human" | "ai") => {
+    setAgentType(type);
+    setAgentId(null); // Reset agent when type changes
+    if (data.onChange) {
+      data.onChange({
+        agentType: type,
+        agentId: null,
+        assignToSelf: false
+      });
+    }
+  };
 
   const handleAgentChange = (value: string) => {
     const isAssignToSelf = value === "";
@@ -32,6 +62,7 @@ export function AssignConversationNode({
     setAgentId(newAgentId);
     if (data.onChange) {
       data.onChange({
+        agentType,
         agentId: newAgentId,
         assignToSelf: isAssignToSelf
       });
@@ -58,27 +89,76 @@ export function AssignConversationNode({
 
           {/* Description */}
           <p className="text-xs text-[#656889] leading-relaxed">
-            Utiliza esta acción para abrir una conversación con un agente.
-            Puedes seleccionar un agente en específico o si no seleccionas ninguno
-            la conversación se asignará a usted.
+            Utiliza esta acción para asignar la conversación a un agente humano o de IA.
           </p>
+
+          {/* Agent type selector */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTypeChange("human");
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className={`flex-1 px-3 py-2 text-xs rounded-lg font-medium transition-colors ${
+                agentType === "human"
+                  ? "bg-[#5B5FEF] text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              👨 Humano
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTypeChange("ai");
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className={`flex-1 px-3 py-2 text-xs rounded-lg font-medium transition-colors ${
+                agentType === "ai"
+                  ? "bg-[#5B5FEF] text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              🤖 IA
+            </button>
+          </div>
 
           {/* Agent selector */}
           <div className="flex flex-col gap-2">
-            <select
-              value={agentId || ""}
-              onChange={(e) => handleAgentChange(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="w-full px-3 py-2.5 text-sm border border-[#E2E4F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B5FEF] bg-white"
-            >
-              <option value="">🤖 Asignarme a mí</option>
-              {MOCK_AGENTS.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.avatar} {agent.name}
-                </option>
-              ))}
-            </select>
+            {agentType === "human" ? (
+              <select
+                value={agentId || ""}
+                onChange={(e) => handleAgentChange(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="w-full px-3 py-2.5 text-sm border border-[#E2E4F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B5FEF] bg-white"
+              >
+                <option value="">🤖 Asignarme a mí</option>
+                {MOCK_HUMAN_AGENTS.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.avatar} {agent.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={agentId || ""}
+                onChange={(e) => handleAgentChange(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="w-full px-3 py-2.5 text-sm border border-[#E2E4F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B5FEF] bg-white"
+              >
+                <option value="">Seleccionar agente de IA</option>
+                {aiAgents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    🤖 {agent.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Próximo paso label near output handle */}

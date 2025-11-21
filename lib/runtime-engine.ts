@@ -129,6 +129,7 @@ export class RuntimeEngine {
       case "assign_conversation":
         // Resolve the assignee
         let resolvedAssigneeId: string | null = null;
+        const agentType = config.agentType || "human"; // Default to human
 
         // If assignToSelf is true or agentId is null/undefined, use default agent
         if (config.assignToSelf === true || !config.agentId) {
@@ -159,19 +160,23 @@ export class RuntimeEngine {
           // Use the specified agent ID
           resolvedAssigneeId = config.agentId;
           console.log(
-            `[RuntimeEngine] Assigning to specific agent: ${resolvedAssigneeId} ` +
+            `[RuntimeEngine] Assigning to ${agentType} agent: ${resolvedAssigneeId} ` +
             `for session ${this.context.sessionId}`
           );
         }
 
-        // Update SessionState with the resolved assignee
+        // Update SessionState with the resolved assignee and type
         try {
           await prisma.sessionState.update({
             where: { sessionId: this.context.sessionId },
-            data: { assigneeId: resolvedAssigneeId },
+            data: {
+              assigneeId: resolvedAssigneeId,
+              assigneeType: agentType,
+              aiTurnCount: 0, // Reset turn count when assigning
+            },
           });
           console.log(
-            `[RuntimeEngine] Successfully updated SessionState with assigneeId: ${resolvedAssigneeId}`
+            `[RuntimeEngine] Successfully updated SessionState with assigneeId: ${resolvedAssigneeId}, type: ${agentType}`
           );
         } catch (error) {
           console.error(

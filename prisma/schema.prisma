@@ -81,12 +81,15 @@ model SessionState {
   variablesJson   String   @default("{}")
   status          String   @default("active") // active, completed, stopped
   assigneeId      String?  // Agent/user assigned to this conversation
+  assigneeType    String?  // human, ai
+  aiTurnCount     Int      @default(0) // Track turns for AI agent conversations
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([sessionId])
   @@index([flowId])
   @@index([assigneeId])
+  @@index([assigneeType])
 }
 
 model DebugAction {
@@ -284,4 +287,36 @@ model MassSend {
   @@index([deviceId])
   @@index([status])
   @@index([scheduledAt])
+}
+
+model AiAgent {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  language     String   @default("es") // Language for responses
+  tone         String   @default("professional") // professional, friendly, casual, formal
+  goal         String?  // What this agent is trying to achieve
+  systemPrompt String   @db.Text // Full system prompt for the AI
+  maxTurns     Int      @default(10) // Max conversation turns before handover
+  createdById  String?  // User who created this agent
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([createdById])
+}
+
+model ConversationMessage {
+  id             String   @id @default(cuid())
+  sessionId      String
+  senderType     String   // USER, AI_AGENT, HUMAN_AGENT
+  senderId       String?  // AiAgent ID or Human Agent ID
+  message        String   @db.Text
+  metadata       String   @default("{}") // JSON for extra data
+  createdAt      DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([senderType])
+  @@index([createdAt])
 }
