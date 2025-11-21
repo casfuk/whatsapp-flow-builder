@@ -14,14 +14,38 @@ interface Whalink {
   createdAt: string;
 }
 
+interface Device {
+  id: string;
+  name: string;
+  phoneNumber: string | null;
+}
+
 export default function WhalinkPage() {
   const router = useRouter();
   const [whalinks, setWhalinks] = useState<Whalink[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadWhalinks();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      const [whalinksRes, devicesRes] = await Promise.all([
+        fetch("/api/whalinks"),
+        fetch("/api/devices"),
+      ]);
+      const whalinksData = await whalinksRes.json();
+      const devicesData = await devicesRes.json();
+      setWhalinks(whalinksData);
+      setDevices(devicesData);
+    } catch (error) {
+      console.error("Failed to load data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadWhalinks = async () => {
     try {
@@ -30,8 +54,6 @@ export default function WhalinkPage() {
       setWhalinks(data);
     } catch (error) {
       console.error("Failed to load whalinks:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -103,22 +125,29 @@ export default function WhalinkPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {whalinks.map((link) => (
-                  <tr key={link.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {link.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
-                      <a href={link.fullUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                        {link.fullUrl}
-                      </a>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {link.deviceId}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(link.createdAt).toLocaleDateString("es-ES")}
-                    </td>
+                {whalinks.map((link) => {
+                  const device = devices.find((d) => d.id === link.deviceId);
+                  return (
+                    <tr key={link.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {link.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <a
+                          href={link.fullUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          {link.slug}
+                        </a>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {device ? `${device.name} (${device.phoneNumber || "Sin número"})` : link.deviceId}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(link.createdAt).toLocaleDateString("es-ES")}
+                      </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center gap-3">
                         <button
@@ -150,9 +179,10 @@ export default function WhalinkPage() {
                           🗑
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
