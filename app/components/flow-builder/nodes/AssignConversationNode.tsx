@@ -13,12 +13,12 @@ type AssignNodeData = {
   onDelete?: (nodeId: string) => void;
 };
 
-// Mock human agents - replace with real API data / useAgentsStore
-const MOCK_HUMAN_AGENTS = [
-  { id: "agent-1", name: "Juan Pérez", avatar: "👨" },
-  { id: "agent-2", name: "María García", avatar: "👩" },
-  { id: "agent-3", name: "Carlos López", avatar: "👨" },
-];
+interface Device {
+  id: string;
+  name: string;
+  phoneNumber: string | null;
+  isConnected: boolean;
+}
 
 interface AiAgent {
   id: string;
@@ -35,6 +35,7 @@ export function AssignConversationNode({
   const [agentType, setAgentType] = useState<"human" | "ai">(data.agentType || "human");
   const [agentId, setAgentId] = useState<string | null>(data.agentId ?? null);
   const [aiAgents, setAiAgents] = useState<AiAgent[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
 
   useEffect(() => {
     // Load AI agents from API
@@ -42,6 +43,19 @@ export function AssignConversationNode({
       .then((res) => res.json())
       .then((data) => setAiAgents(data.filter((a: AiAgent) => a.isActive)))
       .catch((err) => console.error("Failed to load AI agents:", err));
+
+    // Load devices from API
+    fetch("/api/devices")
+      .then((res) => res.json())
+      .then((data) => {
+        const devicesArray = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.devices)
+            ? data.devices
+            : [];
+        setDevices(devicesArray.filter((d: Device) => d.isConnected));
+      })
+      .catch((err) => console.error("Failed to load devices:", err));
   }, []);
 
   const handleTypeChange = (type: "human" | "ai") => {
@@ -136,10 +150,10 @@ export function AssignConversationNode({
                 onMouseDown={(e) => e.stopPropagation()}
                 className="w-full px-3 py-2.5 text-sm border border-[#E2E4F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B5FEF] bg-white"
               >
-                <option value="">🤖 Asignarme a mí</option>
-                {MOCK_HUMAN_AGENTS.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.avatar} {agent.name}
+                <option value="">📱 Asignarme a mí</option>
+                {devices.map((device) => (
+                  <option key={device.id} value={device.id}>
+                    📱 {device.name} {device.phoneNumber ? `(${device.phoneNumber})` : ""}
                   </option>
                 ))}
               </select>
