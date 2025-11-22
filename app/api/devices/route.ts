@@ -9,16 +9,28 @@ export async function GET() {
         name: true,
         phoneNumber: true,
         isConnected: true,
+        color: true,
+        whatsappPhoneNumberId: true,
+        accessToken: true,
+        businessAccountId: true,
+        createdAt: true,
+        updatedAt: true,
       },
       orderBy: { createdAt: "desc" },
     });
 
-    // Format devices for the response with alias and online status
+    // Return devices with consistent field names
     const formattedDevices = devices.map(device => ({
       id: device.id,
-      alias: device.name,
+      name: device.name,
       phoneNumber: device.phoneNumber || "",
-      isOnline: device.isConnected,
+      isConnected: device.isConnected,
+      color: device.color || "#6D5BFA",
+      whatsappPhoneNumberId: device.whatsappPhoneNumberId,
+      accessToken: device.accessToken,
+      businessAccountId: device.businessAccountId,
+      createdAt: device.createdAt.toISOString(),
+      updatedAt: device.updatedAt.toISOString(),
     }));
 
     return NextResponse.json({ devices: formattedDevices });
@@ -55,9 +67,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       id: device.id,
-      alias: device.name,
+      name: device.name,
       phoneNumber: device.phoneNumber || "",
-      isOnline: device.isConnected,
+      isConnected: device.isConnected,
+      color: device.color || "#6D5BFA",
+      whatsappPhoneNumberId: device.whatsappPhoneNumberId,
+      accessToken: device.accessToken,
+      businessAccountId: device.businessAccountId,
+      createdAt: device.createdAt.toISOString(),
+      updatedAt: device.updatedAt.toISOString(),
     }, { status: 201 });
   } catch (error) {
     console.error("Failed to create device:", error);

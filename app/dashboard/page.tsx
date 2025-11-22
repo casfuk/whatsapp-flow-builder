@@ -211,12 +211,12 @@ export default function DashboardPage() {
                       className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold"
                       style={{ backgroundColor: device.color }}
                     >
-                      {device.name.charAt(0).toUpperCase()}
+                      {device.name ? device.name.charAt(0).toUpperCase() : "?"}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-semibold text-gray-900">
-                          {device.name}
+                          {device.name || "Unnamed Device"}
                         </h3>
                         <button
                           onClick={() => openEditModal(device)}
