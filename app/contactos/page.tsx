@@ -35,8 +35,14 @@ export default function ContactosPage() {
   );
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editForm, setEditForm] = useState({
+    name: "",
+    phoneNumber: "",
+    email: "",
+  });
+  const [addForm, setAddForm] = useState({
     name: "",
     phoneNumber: "",
     email: "",
@@ -109,6 +115,48 @@ export default function ContactosPage() {
       });
     } catch (error) {
       console.error("Failed to create test contact:", error);
+    }
+  };
+
+  const openAddModal = () => {
+    setAddForm({ name: "", phoneNumber: "", email: "" });
+    setShowAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setAddForm({ name: "", phoneNumber: "", email: "" });
+  };
+
+  const addNewContact = async () => {
+    if (!addForm.phoneNumber.trim()) {
+      alert("El número de teléfono es requerido");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: addForm.phoneNumber,
+          name: addForm.name || null,
+          email: addForm.email || null,
+          source: "manual",
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || "Error al crear el contacto");
+        return;
+      }
+
+      await fetchContacts();
+      closeAddModal();
+    } catch (error) {
+      console.error("Failed to create contact:", error);
+      alert("Error al crear el contacto");
     }
   };
 
@@ -282,15 +330,15 @@ export default function ContactosPage() {
                 </button>
                 <button
                   onClick={() => setShowImportModal(true)}
-                  className="bg-[#6D5BFA] text-white px-5 py-2.5 rounded-xl hover:bg-[#5B4BD8] transition-colors font-medium shadow-sm"
+                  className="bg-white text-gray-700 border border-gray-300 px-5 py-2.5 rounded-xl hover:bg-gray-50 transition-colors font-medium shadow-sm"
                 >
                   Importar contactos
                 </button>
                 <button
-                  onClick={createTestContact}
-                  className="bg-green-600 text-white px-5 py-2.5 rounded-xl hover:bg-green-700 transition-colors font-medium shadow-sm"
+                  onClick={openAddModal}
+                  className="bg-[#6D5BFA] text-white px-5 py-2.5 rounded-xl hover:bg-[#5B4BD8] transition-colors font-medium shadow-sm"
                 >
-                  + Test Contact
+                  + Nuevo contacto
                 </button>
               </div>
             </div>
@@ -691,6 +739,83 @@ export default function ContactosPage() {
               <button className="px-5 py-2.5 bg-[#6D5BFA] text-white rounded-xl hover:bg-[#5B4BD8] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                 Importar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Contact Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Agregar nuevo contacto
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  value={addForm.name}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, name: e.target.value })
+                  }
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
+                  placeholder="Nombre del contacto"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Teléfono <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={addForm.phoneNumber}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, phoneNumber: e.target.value })
+                  }
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
+                  placeholder="+34 600 000 000"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Incluye el código de país (ej: +34, +1, +52)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Correo electrónico
+                </label>
+                <input
+                  type="email"
+                  value={addForm.email}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, email: e.target.value })
+                  }
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
+                  placeholder="email@ejemplo.com"
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4">
+                <button
+                  onClick={closeAddModal}
+                  className="px-5 py-2.5 text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={addNewContact}
+                  className="px-5 py-2.5 bg-[#6D5BFA] text-white rounded-xl hover:bg-[#5B4BD8] transition-colors font-medium"
+                  disabled={!addForm.phoneNumber.trim()}
+                >
+                  Crear contacto
+                </button>
+              </div>
             </div>
           </div>
         </div>
