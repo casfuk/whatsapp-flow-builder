@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const challenge = searchParams.get("hub.challenge");
 
   // Verify token should match env variable or a configured value
-  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "funnelchat_verify_token";
+  const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || "funnelchat_verify_token";
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("Webhook verified");
