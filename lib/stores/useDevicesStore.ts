@@ -26,12 +26,18 @@ export const useDevicesStore = create<DevicesStore>((set) => ({
         throw new Error("Failed to fetch devices");
       }
       const data = await response.json();
-      // Ensure data is always an array to prevent .map() crashes
-      const safeDevices = Array.isArray(data) ? data : [];
-      set({ devices: safeDevices, loading: false });
+
+      // Handle both array and object responses defensively
+      const devicesArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.devices)
+          ? data.devices
+          : [];
+
+      set({ devices: devicesArray, loading: false });
     } catch (error) {
       set({
-        devices: [], // Reset to empty array on error to prevent .map() crashes
+        devices: [],
         error: error instanceof Error ? error.message : "Unknown error",
         loading: false,
       });

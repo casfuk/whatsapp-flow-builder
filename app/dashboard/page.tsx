@@ -45,12 +45,17 @@ export default function DashboardPage() {
     try {
       const response = await fetch("/api/devices");
       const data = await response.json();
-      // Ensure data is always an array to prevent .map() crashes
-      const safeDevices = Array.isArray(data) ? data : [];
-      setDevices(safeDevices);
+
+      // Handle both array and object responses defensively
+      const devicesArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.devices)
+          ? data.devices
+          : [];
+
+      setDevices(devicesArray);
     } catch (error) {
       console.error("Failed to fetch devices:", error);
-      // Reset to empty array on error to prevent .map() crashes
       setDevices([]);
     } finally {
       setLoading(false);
