@@ -129,6 +129,28 @@ export default function DashboardPage() {
     }
   };
 
+  const deleteDevice = async (deviceId: string, deviceName: string) => {
+    if (!confirm(`¿Estás seguro de eliminar el dispositivo "${deviceName}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/devices/${deviceId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        await fetchDevices();
+      } else {
+        const data = await response.json();
+        alert(data.error || "Error al eliminar el dispositivo");
+      }
+    } catch (error) {
+      console.error("Failed to delete device:", error);
+      alert("Error al eliminar el dispositivo");
+    }
+  };
+
   const openConnectModal = () => {
     setShowConnectModal(true);
   };
@@ -272,19 +294,27 @@ export default function DashboardPage() {
                     </span>
                   </div>
 
-                  {/* Action Button */}
-                  <button
-                    onClick={() => toggleConnection(device)}
-                    className={`w-full py-2.5 rounded-xl font-medium transition-colors ${
-                      device.isConnected
-                        ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
-                        : "bg-[#6D5BFA] text-white hover:bg-[#5B4BD8]"
-                    }`}
-                  >
-                    {device.isConnected
-                      ? "Desconectar número"
-                      : "Conectar número"}
-                  </button>
+                  {/* Action Buttons */}
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => toggleConnection(device)}
+                      className={`w-full py-2.5 rounded-xl font-medium transition-colors ${
+                        device.isConnected
+                          ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                          : "bg-[#6D5BFA] text-white hover:bg-[#5B4BD8]"
+                      }`}
+                    >
+                      {device.isConnected
+                        ? "Desconectar número"
+                        : "Conectar número"}
+                    </button>
+                    <button
+                      onClick={() => deleteDevice(device.id, device.name || "Unnamed Device")}
+                      className="w-full py-2 rounded-xl font-medium text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 transition-colors"
+                    >
+                      Eliminar dispositivo
+                    </button>
+                  </div>
                 </div>
                 ))
               ) : (

@@ -1,116 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET single device
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+type RouteParams = {
+  params: Promise<{ id: string }>;
+};
+
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const device = await prisma.device.findUnique({
-      where: { id },
-    });
 
-    if (!device) {
-      return NextResponse.json({ error: "Device not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(device);
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to fetch device" },
-      { status: 500 }
-    );
-  }
-}
-
-// PUT update device
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-    const {
-      name,
-      color,
-      whatsappPhoneNumberId,
-      phoneNumber,
-      accessToken,
-      businessAccountId,
-      isConnected,
-    } = body;
-
-    // If trying to connect, verify credentials first
-    if (isConnected && whatsappPhoneNumberId && accessToken) {
-      try {
-        const testResponse = await fetch(
-          `https://graph.facebook.com/v17.0/${whatsappPhoneNumberId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          }
-        );
-
-        if (!testResponse.ok) {
-          const errorData = await testResponse.json();
-          return NextResponse.json(
-            {
-              error: "Cannot connect: Invalid WhatsApp credentials",
-              details: errorData.error?.message,
-            },
-            { status: 400 }
-          );
-        }
-      } catch (error) {
-        return NextResponse.json(
-          { error: "Failed to verify WhatsApp credentials" },
-          { status: 400 }
-        );
-      }
-    }
-
-    const device = await prisma.device.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(color !== undefined && { color }),
-        ...(whatsappPhoneNumberId !== undefined && { whatsappPhoneNumberId }),
-        ...(phoneNumber !== undefined && { phoneNumber }),
-        ...(accessToken !== undefined && { accessToken }),
-        ...(businessAccountId !== undefined && { businessAccountId }),
-        ...(isConnected !== undefined && { isConnected }),
-      },
-    });
-
-    return NextResponse.json(device);
-  } catch (error) {
-    console.error("Failed to update device:", error);
-    return NextResponse.json(
-      { error: "Failed to update device" },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE device
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
+    // Delete the device
     await prisma.device.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
+    console.error("Failed to delete device:", error);
     return NextResponse.json(
       { error: "Failed to delete device" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const { name, color } = body;
+
+    const device = await prisma.device.update({
+      where: { id },
+      data: {
+        name: name || undefined,
+        color: color || undefined,
+      },
+    });
+
+    return NextResponse.json({
+      id: device.id,
+      name: device.name,
+      phoneNumber: device.phoneNumber || "",
+      isConnected: device.isConnected,
+      color: device.color || "#6D5BFA",
+      whatsappPhoneNumberId: device.whatsappPhoneNumberId,
+      accessToken: device.accessToken,
+      businessAccountId: device.businessAccountId,
+      createdAt: device.createdAt.toISOString(),
+      updatedAt: device.updatedAt.toISOString(),
+    });
+  } catch (error) {
+    console.error("Failed to update device:", error);
+    return NextResponse.json(
+      { error: "Failed to update device" },
       { status: 500 }
     );
   }

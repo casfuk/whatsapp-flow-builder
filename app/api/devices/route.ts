@@ -52,6 +52,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check for existing device with same phone number ID to prevent duplicates
+    const existingDevice = await prisma.device.findFirst({
+      where: {
+        OR: [
+          { whatsappPhoneNumberId },
+          { phoneNumber: phoneNumber || undefined },
+        ],
+      },
+    });
+
+    if (existingDevice) {
+      return NextResponse.json(
+        { error: "A device with this phone number already exists" },
+        { status: 409 }
+      );
+    }
+
     // Create new device
     const device = await prisma.device.create({
       data: {
