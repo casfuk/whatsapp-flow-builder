@@ -39,10 +39,26 @@ export default function MassSendsPage() {
       ]);
       const massSendsData = await massSendsRes.json();
       const devicesData = await devicesRes.json();
-      setMassSends(massSendsData);
-      setDevices(devicesData);
+
+      // Handle both array and object responses defensively
+      const massSendsArray = Array.isArray(massSendsData)
+        ? massSendsData
+        : Array.isArray(massSendsData?.massSends)
+          ? massSendsData.massSends
+          : [];
+
+      const devicesArray = Array.isArray(devicesData)
+        ? devicesData
+        : Array.isArray(devicesData?.devices)
+          ? devicesData.devices
+          : [];
+
+      setMassSends(massSendsArray);
+      setDevices(devicesArray);
     } catch (error) {
       console.error("Failed to load data:", error);
+      setMassSends([]);
+      setDevices([]);
     } finally {
       setLoading(false);
     }

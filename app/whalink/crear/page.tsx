@@ -35,16 +35,25 @@ export default function CrearWhalinkPage() {
     try {
       const res = await fetch("/api/devices");
       const data = await res.json();
-      setDevices(data);
+
+      // Handle both array and object responses defensively
+      const devicesArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.devices)
+          ? data.devices
+          : [];
+
+      setDevices(devicesArray);
 
       // Set default device (first one or get from settings)
-      if (data.length > 0) {
+      if (devicesArray.length > 0) {
         // Try to get default from settings or use first device
-        const defaultDevice = data.find((d: Device) => d.phoneNumber === "+34621072186") || data[0];
+        const defaultDevice = devicesArray.find((d: Device) => d.phoneNumber === "+34621072186") || devicesArray[0];
         setFormData((prev) => ({ ...prev, deviceId: defaultDevice.id }));
       }
     } catch (error) {
       console.error("Failed to load devices:", error);
+      setDevices([]);
     }
   };
 

@@ -89,11 +89,34 @@ export default function CreateMassSendPage() {
       const devicesData = await devicesRes.json();
       const tagsData = await tagsRes.json();
       const fieldsData = await fieldsRes.json();
-      setDevices(devicesData);
-      setTags(tagsData);
-      setCustomFields(fieldsData);
+
+      // Handle both array and object responses defensively
+      const devicesArray = Array.isArray(devicesData)
+        ? devicesData
+        : Array.isArray(devicesData?.devices)
+          ? devicesData.devices
+          : [];
+
+      const tagsArray = Array.isArray(tagsData)
+        ? tagsData
+        : Array.isArray(tagsData?.tags)
+          ? tagsData.tags
+          : [];
+
+      const fieldsArray = Array.isArray(fieldsData)
+        ? fieldsData
+        : Array.isArray(fieldsData?.customFields)
+          ? fieldsData.customFields
+          : [];
+
+      setDevices(devicesArray);
+      setTags(tagsArray);
+      setCustomFields(fieldsArray);
     } catch (error) {
       console.error("Failed to load data:", error);
+      setDevices([]);
+      setTags([]);
+      setCustomFields([]);
     }
   };
 

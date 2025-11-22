@@ -38,10 +38,26 @@ export default function WhalinkPage() {
       ]);
       const whalinksData = await whalinksRes.json();
       const devicesData = await devicesRes.json();
-      setWhalinks(whalinksData);
-      setDevices(devicesData);
+
+      // Handle both array and object responses defensively
+      const whalinksArray = Array.isArray(whalinksData)
+        ? whalinksData
+        : Array.isArray(whalinksData?.whalinks)
+          ? whalinksData.whalinks
+          : [];
+
+      const devicesArray = Array.isArray(devicesData)
+        ? devicesData
+        : Array.isArray(devicesData?.devices)
+          ? devicesData.devices
+          : [];
+
+      setWhalinks(whalinksArray);
+      setDevices(devicesArray);
     } catch (error) {
       console.error("Failed to load data:", error);
+      setWhalinks([]);
+      setDevices([]);
     } finally {
       setLoading(false);
     }
@@ -51,9 +67,18 @@ export default function WhalinkPage() {
     try {
       const res = await fetch("/api/whalinks");
       const data = await res.json();
-      setWhalinks(data);
+
+      // Handle both array and object responses defensively
+      const whalinksArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.whalinks)
+          ? data.whalinks
+          : [];
+
+      setWhalinks(whalinksArray);
     } catch (error) {
       console.error("Failed to load whalinks:", error);
+      setWhalinks([]);
     }
   };
 

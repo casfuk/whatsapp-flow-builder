@@ -42,9 +42,18 @@ export default function EditarWhalinkPage() {
     try {
       const res = await fetch("/api/devices");
       const data = await res.json();
-      setDevices(data);
+
+      // Handle both array and object responses defensively
+      const devicesArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.devices)
+          ? data.devices
+          : [];
+
+      setDevices(devicesArray);
     } catch (error) {
       console.error("Failed to load devices:", error);
+      setDevices([]);
     }
   };
 
