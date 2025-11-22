@@ -50,18 +50,28 @@ export default function ContactosPage() {
     try {
       const response = await fetch("/api/contacts");
       const data = await response.json();
-      setContacts(data);
+
+      // Handle both array and object responses defensively
+      const contactsArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.contacts)
+          ? data.contacts
+          : [];
+
+      setContacts(contactsArray);
+
       // Sync to Zustand store
-      const globalFormat = data.map((c: any) => ({
+      const globalFormat = contactsArray.map((c: any) => ({
         id: c.id,
         name: c.name || "",
-        phone: c.phoneNumber,
+        phone: c.phone || c.phoneNumber,
         email: c.email,
-        tags: c.tags ? JSON.parse(c.tags) : [],
+        tags: Array.isArray(c.tags) ? c.tags : (c.tags ? JSON.parse(c.tags) : []),
       }));
       setGlobalContacts(globalFormat);
     } catch (error) {
       console.error("Failed to fetch contacts:", error);
+      setContacts([]);
     } finally {
       setLoading(false);
     }

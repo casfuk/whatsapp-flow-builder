@@ -95,11 +95,19 @@ export function ChatThreadEnhanced({
       const response = await fetch(`/api/contacts?search=${encodeURIComponent(phoneNumber)}`);
       const data = await response.json();
 
-      if (data.contacts && data.contacts.length > 0) {
-        setContact(data.contacts[0]);
+      // Handle both array and object responses defensively
+      const contactsArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.contacts)
+          ? data.contacts
+          : [];
+
+      if (contactsArray.length > 0) {
+        setContact(contactsArray[0]);
       }
     } catch (error) {
       console.error("Failed to fetch contact:", error);
+      setContact(null);
     }
   };
 
@@ -108,9 +116,18 @@ export function ChatThreadEnhanced({
       if (!silent) setLoading(true);
       const response = await fetch(`/api/chats/${chatId}/messages`);
       const data = await response.json();
-      setMessages(data.messages || []);
+
+      // Handle both array and object responses defensively
+      const messagesArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.messages)
+          ? data.messages
+          : [];
+
+      setMessages(messagesArray);
     } catch (error) {
       console.error("Failed to fetch messages:", error);
+      setMessages([]);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -120,14 +137,23 @@ export function ChatThreadEnhanced({
     try {
       const response = await fetch("/api/devices");
       const data = await response.json();
-      setDevices(data.devices || []);
+
+      // Handle both array and object responses defensively
+      const devicesArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.devices)
+          ? data.devices
+          : [];
+
+      setDevices(devicesArray);
 
       // Set first device as default
-      if (data.devices && data.devices.length > 0) {
-        setSelectedDeviceId(data.devices[0].id);
+      if (devicesArray.length > 0) {
+        setSelectedDeviceId(devicesArray[0].id);
       }
     } catch (error) {
       console.error("Failed to fetch devices:", error);
+      setDevices([]);
     }
   };
 

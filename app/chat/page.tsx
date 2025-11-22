@@ -60,9 +60,18 @@ export default function ChatsPage() {
     try {
       const response = await fetch("/api/devices");
       const data = await response.json();
-      setDevices(data.devices || []);
+
+      // Handle both array and object responses defensively
+      const devicesArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.devices)
+          ? data.devices
+          : [];
+
+      setDevices(devicesArray);
     } catch (error) {
       console.error("Failed to fetch devices:", error);
+      setDevices([]);
     }
   };
 
@@ -82,9 +91,18 @@ export default function ChatsPage() {
 
       const response = await fetch(`/api/chats?${params.toString()}`);
       const data = await response.json();
-      setChats(data.chats || []);
+
+      // Handle both array and object responses defensively
+      const chatsArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.chats)
+          ? data.chats
+          : [];
+
+      setChats(chatsArray);
     } catch (error) {
       console.error("Failed to fetch chats:", error);
+      setChats([]);
     } finally {
       setLoading(false);
     }
