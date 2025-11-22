@@ -82,6 +82,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Also create/update WhatsAppConfig for flow engine
+    // Find existing cloud_api config or create new one
+    const existingConfig = await prisma.whatsAppConfig.findFirst({
+      where: { mode: "cloud_api" },
+    });
+
+    if (existingConfig) {
+      await prisma.whatsAppConfig.update({
+        where: { id: existingConfig.id },
+        data: {
+          phoneNumber: phoneNumber,
+          phoneNumberId: whatsappPhoneNumberId,
+          wabaId: businessAccountId,
+          accessToken: accessToken,
+        },
+      });
+    } else {
+      await prisma.whatsAppConfig.create({
+        data: {
+          mode: "cloud_api",
+          phoneNumber: phoneNumber,
+          phoneNumberId: whatsappPhoneNumberId,
+          wabaId: businessAccountId,
+          accessToken: accessToken,
+        },
+      });
+    }
+
     return NextResponse.json({
       id: device.id,
       name: device.name,

@@ -11,15 +11,17 @@ WEBHOOK_VERIFY_TOKEN=your_secret_token
 ## Meta Cloud API Configuration
 1. Go to https://developers.facebook.com/apps
 2. Select your app → WhatsApp → Configuration
-3. Set webhook URL: `https://yourapp.vercel.app/api/whatsapp/webhook`
-4. Set verify token: same as `WEBHOOK_VERIFY_TOKEN`
+3. Set webhook URL: `https://yourapp.vercel.app/api/webhooks/whatsapp`
+4. Set verify token: same as `WEBHOOK_VERIFY_TOKEN` or `WHATSAPP_VERIFY_TOKEN`
 5. Subscribe to webhook fields: `messages`
+
+**Important:** The webhook URL must be `/api/webhooks/whatsapp` (with an 's') for full flow execution support.
 
 ## Test Checklist
 
 ### 1. Webhook Verification
 ```bash
-curl "https://yourapp.vercel.app/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=your_secret_token&hub.challenge=test123"
+curl "https://yourapp.vercel.app/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=your_secret_token&hub.challenge=test123"
 # Should return: test123
 ```
 
