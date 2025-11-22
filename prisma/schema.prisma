@@ -118,29 +118,48 @@ model Device {
 }
 
 model Tag {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  color     String   @default("#6D5BFA")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String       @id @default(cuid())
+  name      String       @unique
+  color     String       @default("#6D5BFA")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  contacts ContactTag[]
 
   @@index([name])
 }
 
-model Contact {
-  id          String   @id @default(cuid())
-  phoneNumber String   @unique
-  name        String?
-  email       String?
-  profilePic  String?
-  source      String   @default("manual") // whatsapp, form, manual
-  tags        String   @default("[]") // JSON array of tag IDs
-  metadata    String   @default("{}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model ContactTag {
+  contactId String
+  tagId     String
 
-  @@index([phoneNumber])
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([contactId])
+  @@index([tagId])
+}
+
+model Contact {
+  id              String   @id @default(cuid())
+  name            String?
+  phone           String   @unique @map("phoneNumber")
+  email           String?
+  profileImageUrl String?  @map("profilePic")
+  notes           String?  @db.Text
+  assignedAdminId String?
+  source          String   @default("manual") // whatsapp, form, manual
+  metadata        String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tags         ContactTag[]
+  customValues ContactCustomFieldValue[]
+
+  @@index([phone])
   @@index([source])
+  @@index([assignedAdminId])
 }
 
 model Lead {
@@ -236,6 +255,7 @@ model ContactCustomFieldValue {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
   customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
 
   @@unique([contactId, customFieldId])
@@ -319,4 +339,46 @@ model ConversationMessage {
   @@index([sessionId])
   @@index([senderType])
   @@index([createdAt])
+}
+
+model Chat {
+  id                   String    @id @default(cuid())
+  phoneNumber          String
+  contactName          String?
+  lastMessagePreview   String?   @db.Text
+  lastMessageAt        DateTime  @default(now())
+  unreadCount          Int       @default(0)
+  status               String    @default("open") // open, closed
+  tags                 String    @default("[]") // JSON array of tag IDs
+  deviceId             String
+  isFavorite           Boolean   @default(false)
+  assignedToUserId     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  messages             Message[]
+
+  @@index([phoneNumber])
+  @@index([deviceId])
+  @@index([status])
+  @@index([assignedToUserId])
+  @@index([lastMessageAt])
+  @@index([isFavorite])
+  @@unique([phoneNumber, deviceId])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender      String   // "agent" or "contact"
+  text        String   @db.Text
+  status      String   @default("sent") // sent, delivered, read, failed
+  messageId   String?  // WhatsApp message ID for tracking
+  metadata    String   @default("{}") // JSON for media URLs, etc.
+  createdAt   DateTime @default(now())
+
+  @@index([chatId])
+  @@index([createdAt])
+  @@index([sender])
 }

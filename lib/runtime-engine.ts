@@ -409,14 +409,14 @@ export class RuntimeEngine {
 
       // Find or create contact by phone number
       let contact = await prisma.contact.findUnique({
-        where: { phoneNumber },
+        where: { phone: phoneNumber },
       });
 
       if (!contact) {
         // Create contact if it doesn't exist
         contact = await prisma.contact.create({
           data: {
-            phoneNumber,
+            phone: phoneNumber,
             source: "whatsapp",
           },
         });

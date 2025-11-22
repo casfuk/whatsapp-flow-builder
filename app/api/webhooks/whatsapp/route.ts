@@ -54,12 +54,16 @@ export async function POST(request: NextRequest) {
     console.log(`[Webhook] Message text (trimmed, lowercase): "${messageText.toLowerCase().trim()}"`);
     console.log(`[Webhook] Contact name: ${contactName || 'N/A'}`);
 
+    // Extract profile picture URL if available
+    const profilePicUrl = value.contacts?.[0]?.profile?.picture;
+
     // Save or update contact
     const contact = await prisma.contact.upsert({
-      where: { phoneNumber: from },
+      where: { phone: from },
       create: {
-        phoneNumber: from,
+        phone: from,
         name: contactName,
+        profileImageUrl: profilePicUrl || null,
         source: "whatsapp",
         metadata: JSON.stringify({
           lastMessageAt: new Date().toISOString(),
@@ -68,6 +72,7 @@ export async function POST(request: NextRequest) {
       },
       update: {
         name: contactName || undefined,
+        profileImageUrl: profilePicUrl || undefined,
         metadata: JSON.stringify({
           lastMessageAt: new Date().toISOString(),
           lastMessageId: messageId,
@@ -76,7 +81,77 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[Webhook] Contact for this event: ${contact.id}, phone: ${contact.phoneNumber}, name: ${contact.name || 'unnamed'}`);
+    console.log(`[Webhook] Contact for this event: ${contact.id}, phone: ${contact.phone}, name: ${contact.name || 'unnamed'}`);
+
+    // Get device ID from the webhook payload (WhatsApp Phone Number ID)
+    const devicePhoneNumberId = value.metadata?.phone_number_id;
+
+    // Find device by whatsappPhoneNumberId
+    let device = null;
+    if (devicePhoneNumberId) {
+      device = await prisma.device.findFirst({
+        where: { whatsappPhoneNumberId: devicePhoneNumberId },
+      });
+    }
+
+    // If no device found, use the first connected device as fallback
+    if (!device) {
+      device = await prisma.device.findFirst({
+        where: { isConnected: true },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    // Save message to Chat system if device exists
+    if (device && messageType === "text") {
+      console.log(`[Webhook] Saving message to Chat system (deviceId: ${device.id})`);
+
+      try {
+        // Find or create chat for this contact + device
+        const chat = await prisma.chat.upsert({
+          where: {
+            phoneNumber_deviceId: {
+              phoneNumber: from,
+              deviceId: device.id,
+            },
+          },
+          create: {
+            phoneNumber: from,
+            contactName: contactName,
+            deviceId: device.id,
+            lastMessagePreview: messageText,
+            lastMessageAt: new Date(),
+            unreadCount: 1,
+            status: "open",
+          },
+          update: {
+            contactName: contactName || undefined,
+            lastMessagePreview: messageText,
+            lastMessageAt: new Date(),
+            unreadCount: {
+              increment: 1,
+            },
+          },
+        });
+
+        console.log(`[Webhook] Chat upserted: ${chat.id}`);
+
+        // Save the message
+        await prisma.message.create({
+          data: {
+            chatId: chat.id,
+            sender: "contact",
+            text: messageText,
+            status: "delivered",
+            messageId: messageId,
+          },
+        });
+
+        console.log(`[Webhook] Message saved to database`);
+      } catch (chatError) {
+        console.error(`[Webhook] Error saving to Chat system:`, chatError);
+      }
+    }
 
     // Only process text messages for now
     if (messageType !== "text") {

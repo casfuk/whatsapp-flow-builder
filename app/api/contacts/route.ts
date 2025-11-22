@@ -6,6 +6,8 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get("search");
+    const page = parseInt(searchParams.get("page") || "1");
+    const pageSize = parseInt(searchParams.get("pageSize") || "50");
 
     let where: any = {};
 
@@ -13,18 +15,64 @@ export async function GET(request: NextRequest) {
       where = {
         OR: [
           { name: { contains: search, mode: "insensitive" } },
-          { phoneNumber: { contains: search } },
+          { phone: { contains: search } },
           { email: { contains: search, mode: "insensitive" } },
         ],
       };
     }
 
-    const contacts = await prisma.contact.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-    });
+    const [contacts, total] = await Promise.all([
+      prisma.contact.findMany({
+        where,
+        include: {
+          tags: {
+            include: {
+              tag: true,
+            },
+          },
+          customValues: {
+            include: {
+              customField: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.contact.count({ where }),
+    ]);
 
-    return NextResponse.json(contacts);
+    // Format response
+    const formattedContacts = contacts.map((contact) => ({
+      id: contact.id,
+      name: contact.name,
+      phone: contact.phone,
+      email: contact.email,
+      profileImageUrl: contact.profileImageUrl,
+      notes: contact.notes,
+      assignedAdminId: contact.assignedAdminId,
+      source: contact.source,
+      createdAt: contact.createdAt.toISOString(),
+      updatedAt: contact.updatedAt.toISOString(),
+      tags: contact.tags.map((ct) => ct.tag),
+      customValues: contact.customValues.map((cv) => ({
+        id: cv.id,
+        value: cv.value,
+        fieldDef: {
+          id: cv.customField.id,
+          name: cv.customField.name,
+          type: cv.customField.type,
+        },
+      })),
+    }));
+
+    return NextResponse.json({
+      contacts: formattedContacts,
+      total,
+      page,
+      pageSize,
+    });
   } catch (error) {
     console.error("Failed to fetch contacts:", error);
     return NextResponse.json(
@@ -38,34 +86,42 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { phoneNumber, name, email, source, tags } = body;
+    const { phone, name, email, source, profileImageUrl } = body;
 
-    if (!phoneNumber) {
+    if (!phone) {
       return NextResponse.json(
         { error: "Phone number is required" },
         { status: 400 }
       );
     }
 
-    // Check if contact already exists
-    const existingContact = await prisma.contact.findUnique({
-      where: { phoneNumber },
-    });
-
-    if (existingContact) {
-      return NextResponse.json(
-        { error: "Contact with this phone number already exists" },
-        { status: 400 }
-      );
-    }
-
-    const contact = await prisma.contact.create({
-      data: {
-        phoneNumber,
+    // Upsert contact (create or update)
+    const contact = await prisma.contact.upsert({
+      where: { phone },
+      create: {
+        phone,
         name: name || null,
         email: email || null,
+        profileImageUrl: profileImageUrl || null,
         source: source || "manual",
-        tags: tags ? JSON.stringify(tags) : "[]",
+      },
+      update: {
+        name: name || undefined,
+        email: email || undefined,
+        profileImageUrl: profileImageUrl || undefined,
+        updatedAt: new Date(),
+      },
+      include: {
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
+        customValues: {
+          include: {
+            customField: true,
+          },
+        },
       },
     });
 

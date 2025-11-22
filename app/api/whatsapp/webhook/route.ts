@@ -47,9 +47,9 @@ export async function POST(request: NextRequest) {
 
         // Save or update contact
         await prisma.contact.upsert({
-          where: { phoneNumber: from },
+          where: { phone: from },
           create: {
-            phoneNumber: from,
+            phone: from,
             name: value.contacts?.[0]?.profile?.name || null,
             source: "whatsapp",
             metadata: JSON.stringify({

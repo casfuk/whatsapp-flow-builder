@@ -412,7 +412,7 @@ export default function CreateMassSendPage() {
                           className="p-1.5 hover:bg-gray-200 rounded"
                           title="Campos customizados"
                         >
-                          {"{"}{"}"}{"}
+                          {"{"}{"}"}
                         </button>
                         {showFieldsDropdown && (
                           <div className="absolute top-full left-0 mt-1 w-80 bg-white border border-gray-300 rounded-xl shadow-lg z-10 max-h-96 overflow-auto">

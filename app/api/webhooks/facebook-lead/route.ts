@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
       const trigger = startConfig.trigger;
 
       if (trigger?.type === "facebook_lead" || trigger?.type === "tag_added") {
-        console.log(`Triggering flow: ${flow.name} for lead: ${contact.phoneNumber}`);
-        await executeFlowForLead(flow.id, contact.phoneNumber, leadData);
+        console.log(`Triggering flow: ${flow.name} for lead: ${contact.phone}`);
+        await executeFlowForLead(flow.id, contact.phone, leadData);
       }
     }
 
@@ -127,13 +127,13 @@ async function createContactFromLead(leadData: any) {
 
   // Create or update contact
   let contact = await prisma.contact.findUnique({
-    where: { phoneNumber: phone },
+    where: { phone },
   });
 
   if (contact) {
     // Update existing
     contact = await prisma.contact.update({
-      where: { phoneNumber: phone },
+      where: { phone },
       data: {
         name: name || contact.name,
         email: email || contact.email,
@@ -143,7 +143,7 @@ async function createContactFromLead(leadData: any) {
     // Create new
     contact = await prisma.contact.create({
       data: {
-        phoneNumber: phone,
+        phone,
         name,
         email,
         source: "form",
