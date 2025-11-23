@@ -185,14 +185,6 @@ export async function POST(request: NextRequest) {
       orderBy: {
         createdAt: "desc",
       },
-      include: {
-        flow: {
-          include: {
-            steps: true,
-            connections: true,
-          },
-        },
-      },
     });
 
     if (existingSession && existingSession.currentStepId) {
@@ -200,8 +192,22 @@ export async function POST(request: NextRequest) {
       console.log(`[Webhook] Current step: ${existingSession.currentStepId}`);
       console.log(`[Webhook] User replied with: "${messageText}"`);
 
+      // Load the flow
+      const flow = await prisma.flow.findUnique({
+        where: { id: existingSession.flowId },
+        include: {
+          steps: true,
+          connections: true,
+        },
+      });
+
+      if (!flow) {
+        console.error(`[Webhook] Flow not found: ${existingSession.flowId}`);
+        return NextResponse.json({ status: "flow not found" });
+      }
+
       // Continue the flow from the current step
-      await continueFlow(existingSession, from, messageText, contact.id);
+      await continueFlow(existingSession, flow, from, messageText, contact.id);
 
       return NextResponse.json({ status: "session continued" });
     }
@@ -481,15 +487,13 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
 /**
  * Continue an existing flow session with user's reply
  */
-async function continueFlow(session: any, phoneNumber: string, userReply: string, contactId: string) {
+async function continueFlow(session: any, flow: any, phoneNumber: string, userReply: string, contactId: string) {
   try {
     console.log(`[Flow Continue] ========================================`);
     console.log(`[Flow Continue] CONTINUING FLOW SESSION`);
     console.log(`[Flow Continue] Session ID: ${session.sessionId}`);
     console.log(`[Flow Continue] Current step: ${session.currentStepId}`);
     console.log(`[Flow Continue] User reply: "${userReply}"`);
-
-    const flow = session.flow;
     const currentStep = flow.steps.find((s: any) => s.id === session.currentStepId);
 
     if (!currentStep) {
