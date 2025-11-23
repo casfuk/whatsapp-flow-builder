@@ -14,7 +14,18 @@ interface ButtonOption {
   label: string;
 }
 
-export function QuestionNode({ data, selected, id }: NodeProps) {
+type QuestionNodeData = {
+  questionText?: string;
+  saveToFieldId?: string;
+  buttons?: ButtonOption[];
+  config?: { type?: string };
+  onChange?: (data: Partial<QuestionNodeData>) => void;
+  onDuplicate?: (nodeId: string) => void;
+  onDelete?: (nodeId: string) => void;
+  onUpdateNode?: (id: string, data: any) => void;
+};
+
+export function QuestionNode({ data, selected, id }: NodeProps<QuestionNodeData>) {
   const isMultiple = data.config?.type === "question_multiple";
   const [questionValue, setQuestionValue] = useState(data.questionText || "");
   const [saveToFieldId, setSaveToFieldId] = useState(data.saveToFieldId || "");
@@ -26,6 +37,15 @@ export function QuestionNode({ data, selected, id }: NodeProps) {
       { id: "option3", label: "" },
     ]
   );
+
+  // Propagate changes to parent (like MessageNode and MultipleChoiceNode do)
+  const updateData = (partial: Partial<QuestionNodeData>) => {
+    // Try both patterns for compatibility
+    data.onChange?.(partial);
+    if (data.onUpdateNode) {
+      data.onUpdateNode(id, partial);
+    }
+  };
 
   // Fetch custom fields on mount
   useEffect(() => {
@@ -61,26 +81,20 @@ export function QuestionNode({ data, selected, id }: NodeProps) {
   const handleQuestionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setQuestionValue(newValue);
-    if (data.onUpdateNode) {
-      data.onUpdateNode(id, { questionText: newValue });
-    }
+    updateData({ questionText: newValue });
   };
 
   const handleFieldChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newValue = e.target.value;
     setSaveToFieldId(newValue);
-    if (data.onUpdateNode) {
-      data.onUpdateNode(id, { saveToFieldId: newValue || undefined });
-    }
+    updateData({ saveToFieldId: newValue || undefined });
   };
 
   const handleButtonChange = (index: number, label: string) => {
     const newButtons = [...buttons];
     newButtons[index].label = label;
     setButtons(newButtons);
-    if (data.onUpdateNode) {
-      data.onUpdateNode(id, { buttons: newButtons });
-    }
+    updateData({ buttons: newButtons });
   };
 
   return (

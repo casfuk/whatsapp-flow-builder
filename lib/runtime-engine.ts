@@ -99,7 +99,16 @@ export class RuntimeEngine {
 
       case "question_simple":
       case "question_multiple":
-        const question = this.interpolateVariables(config.question);
+        // Support both questionText (QuestionNode) and question (legacy)
+        const questionText = config.questionText || config.question || "";
+        const question = this.interpolateVariables(questionText);
+
+        console.log(`[RuntimeEngine] Question node - text: "${question}"`);
+        if (config.buttons) {
+          console.log(`[RuntimeEngine] Question has ${config.buttons.length} button(s):`,
+            config.buttons.map((b: any) => b.label || b.title));
+        }
+
         actions.push({
           type: "send_whatsapp",
           to: this.context.variables.phone,

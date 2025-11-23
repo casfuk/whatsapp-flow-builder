@@ -47,6 +47,18 @@ export async function POST(request: NextRequest) {
 
       // Create steps from nodes
       if (nodes && nodes.length > 0) {
+        // Log question_multiple nodes for debugging
+        nodes.forEach((node: any) => {
+          if (node.type === "question_multiple" || node.type === "question_simple") {
+            console.log(`[Flow Save] ${node.type} node data:`, {
+              questionText: node.data.questionText,
+              buttons: node.data.buttons,
+              hasButtons: !!node.data.buttons,
+              buttonCount: node.data.buttons?.length || 0,
+            });
+          }
+        });
+
         await tx.flowStep.createMany({
           data: nodes.map((node: any) => ({
             id: node.id,
