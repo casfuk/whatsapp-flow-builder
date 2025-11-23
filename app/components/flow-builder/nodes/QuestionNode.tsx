@@ -9,11 +9,23 @@ interface CustomField {
   type: string;
 }
 
+interface ButtonOption {
+  id: string;
+  label: string;
+}
+
 export function QuestionNode({ data, selected, id }: NodeProps) {
   const isMultiple = data.config?.type === "question_multiple";
   const [questionValue, setQuestionValue] = useState(data.questionText || "");
   const [saveToFieldId, setSaveToFieldId] = useState(data.saveToFieldId || "");
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [buttons, setButtons] = useState<ButtonOption[]>(
+    data.buttons || [
+      { id: "option1", label: "" },
+      { id: "option2", label: "" },
+      { id: "option3", label: "" },
+    ]
+  );
 
   // Fetch custom fields on mount
   useEffect(() => {
@@ -40,6 +52,12 @@ export function QuestionNode({ data, selected, id }: NodeProps) {
     setSaveToFieldId(data.saveToFieldId || "");
   }, [data.saveToFieldId]);
 
+  useEffect(() => {
+    if (data.buttons) {
+      setButtons(data.buttons);
+    }
+  }, [data.buttons]);
+
   const handleQuestionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setQuestionValue(newValue);
@@ -53,6 +71,15 @@ export function QuestionNode({ data, selected, id }: NodeProps) {
     setSaveToFieldId(newValue);
     if (data.onUpdateNode) {
       data.onUpdateNode(id, { saveToFieldId: newValue || undefined });
+    }
+  };
+
+  const handleButtonChange = (index: number, label: string) => {
+    const newButtons = [...buttons];
+    newButtons[index].label = label;
+    setButtons(newButtons);
+    if (data.onUpdateNode) {
+      data.onUpdateNode(id, { buttons: newButtons });
     }
   };
 
@@ -121,6 +148,25 @@ export function QuestionNode({ data, selected, id }: NodeProps) {
               ))}
             </select>
           </div>
+
+          {/* Button options (only for multiple choice) */}
+          {isMultiple && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-[#656889]">Opciones de botones</span>
+              {buttons.map((button, index) => (
+                <input
+                  key={button.id}
+                  type="text"
+                  placeholder={`Opción ${index + 1}`}
+                  value={button.label}
+                  onChange={(e) => handleButtonChange(index, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="w-full rounded-md border border-[#D2D4E4] bg-white px-2 py-1.5 text-xs text-[#373955] outline-none focus:border-[#5B5FEF] focus:ring-1 focus:ring-[#5B5FEF]"
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
