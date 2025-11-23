@@ -43,10 +43,31 @@ export async function POST(request: NextRequest) {
 
     const message = messages[0];
     const from = message.from; // Phone number
-    const messageText = message.text?.body || "";
     const messageType = message.type;
     const messageId = message.id;
     const contactName = value.contacts?.[0]?.profile?.name || null;
+
+    // Handle both text and interactive (button/list) messages
+    let normalizedText: string | null = null;
+
+    if (messageType === "text" && message.text?.body) {
+      normalizedText = message.text.body;
+    } else if (messageType === "interactive" && message.interactive) {
+      if (message.interactive.type === "button_reply" && message.interactive.button_reply) {
+        normalizedText = message.interactive.button_reply.id || message.interactive.button_reply.title;
+        console.log(`[Webhook] Button clicked - ID: ${message.interactive.button_reply.id}, Title: ${message.interactive.button_reply.title}`);
+      } else if (message.interactive.type === "list_reply" && message.interactive.list_reply) {
+        normalizedText = message.interactive.list_reply.id || message.interactive.list_reply.title;
+        console.log(`[Webhook] List item selected - ID: ${message.interactive.list_reply.id}, Title: ${message.interactive.list_reply.title}`);
+      }
+    }
+
+    if (!normalizedText) {
+      console.log(`[Webhook] Unsupported message type: ${messageType}`);
+      return NextResponse.json({ status: "unsupported type" });
+    }
+
+    const messageText = normalizedText;
 
     console.log(`[Webhook] ========================================`);
     console.log(`[Webhook] Received ${messageType} message from ${from}`);
@@ -103,7 +124,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Save message to Chat system if device exists
-    if (device && messageType === "text") {
+    if (device) {
       console.log(`[Webhook] Saving message to Chat system (deviceId: ${device.id})`);
 
       try {
@@ -153,10 +174,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Only process text messages for now
-    if (messageType !== "text") {
-      console.log(`[Webhook] Ignoring non-text message type: ${messageType}`);
-      return NextResponse.json({ status: "ignored" });
+    // Check if this is a reply to an existing session (button click)
+    const existingSession = await prisma.sessionState.findFirst({
+      where: {
+        sessionId: {
+          startsWith: from,
+        },
+        status: "active",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
+        flow: {
+          include: {
+            steps: true,
+            connections: true,
+          },
+        },
+      },
+    });
+
+    if (existingSession && existingSession.currentStepId) {
+      console.log(`[Webhook] Found existing session: ${existingSession.sessionId}`);
+      console.log(`[Webhook] Current step: ${existingSession.currentStepId}`);
+      console.log(`[Webhook] User replied with: "${messageText}"`);
+
+      // Continue the flow from the current step
+      await continueFlow(existingSession, from, messageText, contact.id);
+
+      return NextResponse.json({ status: "session continued" });
     }
 
     // Find all active flows with matching triggers
@@ -428,5 +475,135 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
     console.log(`[Flow Execution] ========================================`);
   } catch (error) {
     console.error(`[Flow Execution] Error executing flow:`, error);
+  }
+}
+
+/**
+ * Continue an existing flow session with user's reply
+ */
+async function continueFlow(session: any, phoneNumber: string, userReply: string, contactId: string) {
+  try {
+    console.log(`[Flow Continue] ========================================`);
+    console.log(`[Flow Continue] CONTINUING FLOW SESSION`);
+    console.log(`[Flow Continue] Session ID: ${session.sessionId}`);
+    console.log(`[Flow Continue] Current step: ${session.currentStepId}`);
+    console.log(`[Flow Continue] User reply: "${userReply}"`);
+
+    const flow = session.flow;
+    const currentStep = flow.steps.find((s: any) => s.id === session.currentStepId);
+
+    if (!currentStep) {
+      console.error(`[Flow Continue] Current step not found: ${session.currentStepId}`);
+      return;
+    }
+
+    console.log(`[Flow Continue] Current step type: ${currentStep.type}`);
+
+    // Find the next step based on user's reply
+    let nextStepId: string | null = null;
+
+    if (currentStep.type === "question_multiple" || currentStep.type === "question_simple") {
+      // For question nodes, find the connection that matches the reply
+      const outgoingConnections = flow.connections.filter(
+        (c: any) => c.fromStepId === currentStep.id
+      );
+
+      console.log(`[Flow Continue] Found ${outgoingConnections.length} outgoing connection(s)`);
+
+      if (outgoingConnections.length > 0) {
+        // Try to match reply with connection labels or handles
+        const normalizedReply = userReply.toLowerCase().trim();
+
+        for (const conn of outgoingConnections) {
+          const sourceHandle = conn.sourceHandle?.toLowerCase().trim();
+          const conditionLabel = conn.conditionLabel?.toLowerCase().trim();
+
+          console.log(`[Flow Continue] Checking connection - handle: "${sourceHandle}", label: "${conditionLabel}"`);
+
+          if (sourceHandle && normalizedReply.includes(sourceHandle)) {
+            nextStepId = conn.toStepId;
+            console.log(`[Flow Continue] ✓ Matched source handle "${sourceHandle}"`);
+            break;
+          } else if (conditionLabel && normalizedReply.includes(conditionLabel)) {
+            nextStepId = conn.toStepId;
+            console.log(`[Flow Continue] ✓ Matched condition label "${conditionLabel}"`);
+            break;
+          }
+        }
+
+        // If no match, take the first connection
+        if (!nextStepId && outgoingConnections.length > 0) {
+          nextStepId = outgoingConnections[0].toStepId;
+          console.log(`[Flow Continue] No match found, taking first connection`);
+        }
+      }
+    } else {
+      // For other step types, just take the next connection
+      const nextConnection = flow.connections.find(
+        (c: any) => c.fromStepId === currentStep.id
+      );
+      if (nextConnection) {
+        nextStepId = nextConnection.toStepId;
+      }
+    }
+
+    if (!nextStepId) {
+      console.log(`[Flow Continue] No next step found, ending flow`);
+      await prisma.sessionState.update({
+        where: { sessionId: session.sessionId },
+        data: { status: "completed" },
+      });
+      return;
+    }
+
+    console.log(`[Flow Continue] Next step ID: ${nextStepId}`);
+
+    // Load variables from session
+    const variables = JSON.parse(session.variablesJson || "{}");
+    variables.phone = phoneNumber;
+    variables.lastReply = userReply;
+    variables.contactId = contactId;
+
+    // Initialize engine and continue execution
+    const engine = new FlowEngine(flow, session.sessionId, variables);
+    const actions = await engine.executeFromStep(nextStepId);
+
+    console.log(`[Flow Continue] ✓ Generated ${actions.length} action(s)`);
+
+    // Process actions
+    for (let i = 0; i < actions.length; i++) {
+      const action = actions[i];
+      console.log(`[Flow Continue] Processing action ${i + 1}/${actions.length}: ${action.type}`);
+
+      if (action.type === "send_whatsapp") {
+        console.log(`[Flow Continue]   → Sending message to ${action.to}`);
+        console.log(`[Flow Continue]   → Text: "${action.text}"`);
+
+        try {
+          const success = await sendWhatsAppMessage({
+            to: action.to,
+            message: action.text,
+          });
+
+          await prisma.messageLog.create({
+            data: {
+              phone: action.to,
+              message: action.text,
+              status: success ? "sent" : "failed",
+            },
+          });
+
+          console.log(`[Flow Continue]   ✓ Message ${success ? 'sent' : 'failed'}`);
+        } catch (err) {
+          console.error(`[Flow Continue]   ✗ Exception:`, err);
+        }
+      }
+    }
+
+    console.log(`[Flow Continue] ========================================`);
+    console.log(`[Flow Continue] ✓✓✓ Flow continued successfully for ${phoneNumber}`);
+    console.log(`[Flow Continue] ========================================`);
+  } catch (error) {
+    console.error(`[Flow Continue] Error:`, error);
   }
 }
