@@ -634,7 +634,7 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+              Authorization: `Bearer ${process.env.WHATSAPP_CLOUD_API_TOKEN}`,
             },
             body: JSON.stringify(body),
           });
@@ -1010,7 +1010,7 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+                Authorization: `Bearer ${process.env.WHATSAPP_CLOUD_API_TOKEN}`,
               },
               body: JSON.stringify(body),
             });
