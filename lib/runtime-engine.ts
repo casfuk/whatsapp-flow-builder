@@ -223,85 +223,51 @@ export class RuntimeEngine {
           console.log(`[RuntimeEngine] Contact: ${this.context.variables.phone}`);
           console.log(`[RuntimeEngine] Question text: "${mcQuestion}"`);
           console.log(`[RuntimeEngine] Options count: ${mcOptions.length}`);
-          console.log(`[RuntimeEngine] Options:`, mcOptions.map((opt: any) => `${opt.id}: "${opt.title}"`));
+          console.log(`[RuntimeEngine] Options:`, mcOptions.map((opt: any) => `${opt.id}: "${opt.label || opt.title}"`));
 
-          // Use interactive buttons if 3 or fewer options, otherwise use numbered list
-          const useInteractiveButtons = mcOptions.length > 0 && mcOptions.length <= 3;
+          // Build interactive button payload - WhatsApp Cloud API format
+          const buttons = mcOptions.map((opt: any, index: number) => ({
+            type: "reply",
+            reply: {
+              id: opt.id,
+              title: (opt.label || opt.title || `Opción ${index + 1}`).substring(0, 20), // WhatsApp limit: 20 chars
+            },
+          }));
 
-          if (useInteractiveButtons) {
-            try {
-              console.log(`[RuntimeEngine] Attempting WhatsApp interactive buttons (${mcOptions.length} options)`);
-
-              // Build interactive button payload
-              const buttons = mcOptions.map((opt: any, index: number) => ({
-                type: "reply",
-                reply: {
-                  id: opt.id, // Use option ID as button ID
-                  title: (opt.title || opt.label || `Opción ${index + 1}`).substring(0, 20), // WhatsApp limit: 20 chars
-                },
-              }));
-
-              actions.push({
-                type: "send_whatsapp_interactive",
-                to: this.context.variables.phone,
-                interactive: {
-                  type: "button",
-                  body: {
-                    text: mcQuestion,
-                  },
-                  action: {
-                    buttons: buttons,
-                  },
-                },
-              });
-              console.log(`[RuntimeEngine] ✓ Interactive buttons action created`);
-            } catch (buttonError) {
-              console.error(`[Interactive Buttons Runtime Error]`, buttonError);
-              // Fallback to numbered list
-              console.log(`[RuntimeEngine] Falling back to numbered list`);
-              let fullMessage = mcQuestion;
-              if (mcOptions.length > 0) {
-                fullMessage += "\n\n";
-                mcOptions.forEach((opt: any, index: number) => {
-                  fullMessage += `${index + 1}. ${opt.title || opt.label || `Option ${index + 1}`}\n`;
-                });
-                fullMessage += "\nResponde con el número de tu opción.";
-              }
-              actions.push({
-                type: "send_whatsapp",
-                to: this.context.variables.phone,
-                text: fullMessage,
-              });
-            }
-          } else {
-            // Fallback to numbered list for >3 options or no options
-            console.log(`[RuntimeEngine] Using numbered list (${mcOptions.length} options)`);
-
-            let fullMessage = mcQuestion;
-            if (mcOptions.length > 0) {
-              fullMessage += "\n\n";
-              mcOptions.forEach((opt: any, index: number) => {
-                fullMessage += `${index + 1}. ${opt.title || opt.label || `Option ${index + 1}`}\n`;
-              });
-              fullMessage += "\nResponde con el número de tu opción.";
-            }
-
-            actions.push({
-              type: "send_whatsapp",
-              to: this.context.variables.phone,
-              text: fullMessage,
-            });
-          }
-
+          actions.push({
+            type: "send_whatsapp_interactive",
+            to: this.context.variables.phone,
+            interactive: {
+              type: "button",
+              body: {
+                text: mcQuestion,
+              },
+              action: {
+                buttons: buttons,
+              },
+            },
+          });
+          console.log(`[RuntimeEngine] ✓ Interactive buttons action created with ${buttons.length} buttons`);
           console.log(`[RuntimeEngine] ========================================`);
         } catch (error) {
           console.error(`[MultipleChoice Runtime Error]`, error);
-          // Ultimate fallback: send question as plain text
-          const fallbackText = config.message || config.questionText || "Please select an option";
+          // Fallback to numbered list only on error
+          const mcMessage = config.message || config.questionText || "";
+          const mcQuestion = this.interpolateVariables(mcMessage);
+          const mcOptions = config.options || [];
+
+          let fullMessage = mcQuestion;
+          if (mcOptions.length > 0) {
+            fullMessage += "\n\n";
+            mcOptions.forEach((opt: any, index: number) => {
+              fullMessage += `${index + 1}. ${opt.label || opt.title || `Option ${index + 1}`}\n`;
+            });
+            fullMessage += "\nResponde con el número de tu opción.";
+          }
           actions.push({
             type: "send_whatsapp",
             to: this.context.variables.phone,
-            text: fallbackText,
+            text: fullMessage,
           });
         }
 

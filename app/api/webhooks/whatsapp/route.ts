@@ -192,6 +192,58 @@ export async function POST(request: NextRequest) {
       console.log(`[Webhook] Current step: ${existingSession.currentStepId}`);
       console.log(`[Webhook] User replied with: "${messageText}"`);
 
+      // Check if this session is assigned to an AI agent
+      if (existingSession.assigneeType === "ai" && existingSession.assigneeId) {
+        console.log(`[Webhook] Session assigned to AI agent: ${existingSession.assigneeId}`);
+
+        try {
+          // Call AI agent API endpoint
+          const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/ai-agent`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              agentId: existingSession.assigneeId,
+              userMessage: messageText,
+              sessionId: existingSession.sessionId,
+            }),
+          });
+
+          if (!response.ok) {
+            console.error(`[Webhook] AI agent API error: ${response.status}`);
+            throw new Error(`AI agent API returned ${response.status}`);
+          }
+
+          const data = await response.json();
+          const aiReply = data.reply;
+
+          console.log(`[Webhook] AI agent response: ${aiReply.substring(0, 100)}...`);
+
+          // Send reply via WhatsApp
+          await sendWhatsAppMessage({
+            to: from,
+            message: aiReply,
+          });
+
+          // Log message
+          await prisma.messageLog.create({
+            data: {
+              phone: from,
+              message: aiReply,
+              status: "sent",
+            },
+          });
+
+          console.log(`[Webhook] ✓ AI agent reply sent from ${data.agentName}`);
+
+          return NextResponse.json({ status: "ai agent replied" });
+        } catch (err) {
+          console.error(`[Webhook] Error processing AI agent message:`, err);
+          return NextResponse.json({ status: "ai agent error" });
+        }
+      }
+
       // Load the flow
       const flow = await prisma.flow.findUnique({
         where: { id: existingSession.flowId },
@@ -502,6 +554,9 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
         console.log(`[Flow Execution]   → To: ${action.to}`);
         console.log(`[Flow Execution]   → Media type: ${action.mediaType}`);
 
+        const mediaId = action.image?.id || action.document?.id || action.video?.id || action.audio?.id;
+        console.log(`[Flow Execution] Sending media:`, mediaId, action.mediaType);
+
         try {
           const success = await sendWhatsAppMessage({
             to: action.to,
@@ -539,35 +594,43 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
           console.log(`[Flow Execution]   → AI agent assignment - generating reply...`);
 
           try {
-            // Fetch AI agent details
-            const aiAgent = await prisma.aiAgent.findUnique({
-              where: { id: action.assigneeId },
+            // Call AI agent API endpoint
+            const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/ai-agent`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                agentId: action.assigneeId,
+                userMessage: initialMessage,
+                sessionId: sessionId,
+              }),
             });
 
-            if (!aiAgent) {
-              console.error(`[Flow Execution]   ✗ AI agent not found: ${action.assigneeId}`);
-            } else {
-              console.log(`[Flow Execution]   → AI agent: ${aiAgent.name}`);
-
-              // For now, send a simple greeting from the AI agent
-              // TODO: Integrate with actual AI agent API endpoint
-              const aiReply = `Hola! Soy ${aiAgent.name}, tu agente de IA. ¿En qué puedo ayudarte?`;
-
-              const success = await sendWhatsAppMessage({
-                to: phoneNumber,
-                message: aiReply,
-              });
-
-              await prisma.messageLog.create({
-                data: {
-                  phone: phoneNumber,
-                  message: aiReply,
-                  status: success ? "sent" : "failed",
-                },
-              });
-
-              console.log(`[Flow Execution]   ✓ AI agent reply sent from ${aiAgent.name}`);
+            if (!response.ok) {
+              console.error(`[Flow Execution]   ✗ AI agent API error: ${response.status}`);
+              throw new Error(`AI agent API returned ${response.status}`);
             }
+
+            const data = await response.json();
+            const aiReply = data.reply;
+
+            console.log(`[Flow Execution]   → AI agent response: ${aiReply.substring(0, 100)}...`);
+
+            const success = await sendWhatsAppMessage({
+              to: phoneNumber,
+              message: aiReply,
+            });
+
+            await prisma.messageLog.create({
+              data: {
+                phone: phoneNumber,
+                message: aiReply,
+                status: success ? "sent" : "failed",
+              },
+            });
+
+            console.log(`[Flow Execution]   ✓ AI agent reply sent from ${data.agentName}`);
           } catch (err) {
             console.error(`[Flow Execution]   ✗ Exception while generating AI reply:`, err);
           }
@@ -774,6 +837,9 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
         } else if (action.type === "send_whatsapp_media") {
           console.log(`[Flow Continue]   → Sending media message to ${action.to}`);
           console.log(`[Flow Continue]   → Media type: ${action.mediaType}`);
+
+          const mediaId = action.image?.id || action.document?.id || action.video?.id || action.audio?.id;
+          console.log(`[Flow Continue] Sending media:`, mediaId, action.mediaType);
 
           try {
             const success = await sendWhatsAppMessage({

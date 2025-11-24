@@ -408,13 +408,28 @@ function AudioForm({
       };
 
       // Handle recording stop
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const audioUrl = URL.createObjectURL(audioBlob);
 
-        // TODO: Upload audioBlob to server and get real URL
-        // For now, use blob URL
-        updateData({ fileUrl: audioUrl });
+        // Upload audioBlob to server
+        try {
+          const formData = new FormData();
+          formData.append("file", audioBlob, "recording.webm");
+          const upload = await fetch("/api/upload", { method: "POST", body: formData });
+          const json = await upload.json();
+
+          // Save uploaded media ID and set message type
+          updateData({
+            fileUrl: audioUrl,
+            mediaId: json.fileId,
+            messageType: "audio"
+          } as any);
+        } catch (error) {
+          console.error('Error uploading audio:', error);
+          // Fallback to blob URL if upload fails
+          updateData({ fileUrl: audioUrl });
+        }
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
