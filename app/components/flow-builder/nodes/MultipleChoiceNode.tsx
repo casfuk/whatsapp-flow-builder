@@ -63,7 +63,7 @@ export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeDat
       <Handle type="target" position={Position.Left} className="node-handle" />
       <div className="bg-white rounded-xl shadow-md p-3 border border-[#d5d9e2]
                       w-[260px] min-h-[120px]
-                      flex flex-col gap-2">
+                      flex flex-col gap-2 overflow-visible">
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 items-center justify-center rounded-full border border-[#c7d0e5] text-sm flex-shrink-0">
             ?
@@ -112,34 +112,33 @@ export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeDat
         {/* Scrollable options list + add button */}
         <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto overflow-x-visible pr-3">
           {options.map((opt) => (
-            <div key={opt.id} className="relative flex items-center gap-2 mb-1">
-              <input
-                className="flex-1 rounded-xl border border-[#d5d9e2] bg-white px-3 py-2 text-sm text-[#13161f] outline-none break-words min-w-0"
-                placeholder="Ingresa el título del botón"
-                value={opt.title}
-                onChange={(e) => handleOptionChange(opt.id, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
-              />
-              <button
-                type="button"
-                className="text-base text-[#c0392b] flex-shrink-0 w-6 h-6 flex items-center justify-center hover:opacity-70"
-                onClick={() => removeOption(opt.id)}
-              >
-                🗑
-              </button>
-              {/* Per-option connector */}
+            <div key={opt.id} className="relative mb-1">
+              {/* Row contents: input + trash */}
+              <div className="flex items-center gap-2 pr-8">
+                <input
+                  className="flex-1 rounded-xl border border-[#d5d9e2] bg-white px-3 py-2 text-sm text-[#13161f] outline-none break-words min-w-0"
+                  placeholder="Ingresa el título del botón"
+                  value={opt.title}
+                  onChange={(e) => handleOptionChange(opt.id, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                />
+                <button
+                  type="button"
+                  className="text-base text-[#c0392b] flex-shrink-0 w-6 h-6 flex items-center justify-center hover:opacity-70"
+                  onClick={() => removeOption(opt.id)}
+                >
+                  🗑
+                </button>
+              </div>
+
+              {/* Connector dot: positioned on the far right */}
               <Handle
                 type="source"
                 position={Position.Right}
                 id={opt.id}
-                className="node-handle"
-                style={{
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  right: '-8px',
-                }}
+                className="node-handle !absolute !right-0 !top-1/2 !-translate-y-1/2"
               />
             </div>
           ))}
