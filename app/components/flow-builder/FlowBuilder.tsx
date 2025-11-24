@@ -187,8 +187,18 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
         nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
       } else if (newNodeType === "send_message") {
         nodeData = { ...baseData, type: "text", text: "", delaySeconds: 3 };
-      } else if (newNodeType === "question_simple" || newNodeType === "question_multiple") {
+      } else if (newNodeType === "question_simple") {
         nodeData = { ...baseData, questionText: "" };
+      } else if (newNodeType === "question_multiple") {
+        nodeData = {
+          ...baseData,
+          questionText: "",
+          buttons: [
+            { id: "option1", label: "" },
+            { id: "option2", label: "" },
+            { id: "option3", label: "" }
+          ]
+        };
       } else if (newNodeType === "wait") {
         nodeData = { ...baseData, waitConfig: { timeBetweenSeconds: 60 } };
       } else if (newNodeType === "condition") {
@@ -299,6 +309,18 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
         }),
         // Add onChange handler for wait nodes
         ...(n.type === 'wait' && {
+          onChange: (partial: any) => {
+            setNodes((nds) =>
+              nds.map((node) =>
+                node.id === n.id
+                  ? { ...node, data: { ...node.data, ...partial } }
+                  : node
+              )
+            );
+          }
+        }),
+        // Add onChange handler for question nodes
+        ...((n.type === 'question_simple' || n.type === 'question_multiple') && {
           onChange: (partial: any) => {
             setNodes((nds) =>
               nds.map((node) =>
@@ -423,8 +445,18 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (type === "send_message") {
       nodeData = { ...baseData, type: "text", text: "", delaySeconds: 3 };
-    } else if (type === "question_simple" || type === "question_multiple") {
+    } else if (type === "question_simple") {
       nodeData = { ...baseData, questionText: "" };
+    } else if (type === "question_multiple") {
+      nodeData = {
+        ...baseData,
+        questionText: "",
+        buttons: [
+          { id: "option1", label: "" },
+          { id: "option2", label: "" },
+          { id: "option3", label: "" }
+        ]
+      };
     } else if (type === "wait") {
       nodeData = { ...baseData, waitConfig: { timeBetweenSeconds: 60 } };
     } else if (type === "condition") {
@@ -469,8 +501,18 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (nodeType === "send_message") {
       nodeData = { ...baseData, type: "text", text: "", delaySeconds: 3 };
-    } else if (nodeType === "question_simple" || nodeType === "question_multiple") {
+    } else if (nodeType === "question_simple") {
       nodeData = { ...baseData, questionText: "" };
+    } else if (nodeType === "question_multiple") {
+      nodeData = {
+        ...baseData,
+        questionText: "",
+        buttons: [
+          { id: "option1", label: "" },
+          { id: "option2", label: "" },
+          { id: "option3", label: "" }
+        ]
+      };
     } else if (nodeType === "wait") {
       nodeData = { ...baseData, waitConfig: { timeBetweenSeconds: 60 } };
     } else if (nodeType === "condition") {
@@ -564,8 +606,18 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       nodeData = { ...baseData, message: "", options: [{ id: "opt-1", title: "" }] };
     } else if (type === "send_message") {
       nodeData = { ...baseData, type: "text", text: "", delaySeconds: 3 };
-    } else if (type === "question_simple" || type === "question_multiple") {
+    } else if (type === "question_simple") {
       nodeData = { ...baseData, questionText: "" };
+    } else if (type === "question_multiple") {
+      nodeData = {
+        ...baseData,
+        questionText: "",
+        buttons: [
+          { id: "option1", label: "" },
+          { id: "option2", label: "" },
+          { id: "option3", label: "" }
+        ]
+      };
     } else if (type === "wait") {
       nodeData = { ...baseData, waitConfig: { timeBetweenSeconds: 60 } };
     } else if (type === "condition") {

@@ -90,6 +90,18 @@ export async function PUT(
 
       // Create new steps from nodes
       if (nodes && nodes.length > 0) {
+        // Debug logging for question nodes
+        nodes.forEach((node: any) => {
+          if (node.type === "question_multiple" || node.type === "question_simple") {
+            console.log(`[Flow Update] ${node.type} node (id: ${node.id}):`, {
+              questionText: node.data.questionText,
+              buttons: node.data.buttons,
+              saveToFieldId: node.data.saveToFieldId,
+              allData: node.data
+            });
+          }
+        });
+
         await tx.flowStep.createMany({
           data: nodes.map((node: any) => ({
             id: node.id,

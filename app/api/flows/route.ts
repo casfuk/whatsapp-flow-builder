@@ -47,14 +47,14 @@ export async function POST(request: NextRequest) {
 
       // Create steps from nodes
       if (nodes && nodes.length > 0) {
-        // Log question_multiple nodes for debugging
+        // Debug logging for question nodes
         nodes.forEach((node: any) => {
           if (node.type === "question_multiple" || node.type === "question_simple") {
-            console.log(`[Flow Save] ${node.type} node data:`, {
+            console.log(`[Flow Save] ${node.type} node (id: ${node.id}):`, {
               questionText: node.data.questionText,
               buttons: node.data.buttons,
-              hasButtons: !!node.data.buttons,
-              buttonCount: node.data.buttons?.length || 0,
+              saveToFieldId: node.data.saveToFieldId,
+              allData: node.data
             });
           }
         });
