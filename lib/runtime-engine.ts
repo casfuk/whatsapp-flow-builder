@@ -85,12 +85,78 @@ export class RuntimeEngine {
         };
 
       case "send_message":
-        const message = this.interpolateVariables(config.message || config.text || "");
-        actions.push({
-          type: "send_whatsapp",
-          to: this.context.variables.phone,
-          text: message,
-        });
+        // Check if this is a multimedia message
+        const messageType = config.messageType || config.type || "text";
+
+        if (messageType === "multimedia" || messageType === "media") {
+          // Handle multimedia messages (image, document, video, audio)
+          const mediaId = config.mediaId;
+          const mediaUrl = config.mediaUrl || config.url;
+          const caption = this.interpolateVariables(config.caption || "");
+          const filename = config.filename;
+
+          console.log(`[RuntimeEngine] Sending multimedia message - type: ${config.mediaFormat || 'image'}`);
+          console.log(`[RuntimeEngine] Media ID: ${mediaId || 'none'}, URL: ${mediaUrl || 'none'}`);
+          console.log(`[RuntimeEngine] Caption: "${caption}"`);
+
+          // Determine media format (default to image)
+          const mediaFormat = config.mediaFormat || "image";
+
+          if (mediaFormat === "image") {
+            actions.push({
+              type: "send_whatsapp_media",
+              to: this.context.variables.phone,
+              mediaType: "image",
+              image: {
+                id: mediaId,
+                link: mediaUrl,
+                caption: caption,
+              },
+            });
+          } else if (mediaFormat === "document") {
+            actions.push({
+              type: "send_whatsapp_media",
+              to: this.context.variables.phone,
+              mediaType: "document",
+              document: {
+                id: mediaId,
+                link: mediaUrl,
+                caption: caption,
+                filename: filename,
+              },
+            });
+          } else if (mediaFormat === "video") {
+            actions.push({
+              type: "send_whatsapp_media",
+              to: this.context.variables.phone,
+              mediaType: "video",
+              video: {
+                id: mediaId,
+                link: mediaUrl,
+                caption: caption,
+              },
+            });
+          } else if (mediaFormat === "audio") {
+            actions.push({
+              type: "send_whatsapp_media",
+              to: this.context.variables.phone,
+              mediaType: "audio",
+              audio: {
+                id: mediaId,
+                link: mediaUrl,
+              },
+            });
+          }
+        } else {
+          // Regular text message
+          const message = this.interpolateVariables(config.message || config.text || "");
+          actions.push({
+            type: "send_whatsapp",
+            to: this.context.variables.phone,
+            text: message,
+          });
+        }
+
         return {
           actions,
           nextStepId: this.getNextStepId(step.id),
@@ -135,24 +201,55 @@ export class RuntimeEngine {
         console.log(`[RuntimeEngine] Options count: ${mcOptions.length}`);
         console.log(`[RuntimeEngine] Options:`, mcOptions.map((opt: any) => `${opt.id}: "${opt.title}"`));
 
-        // Build the message with numbered options
-        let fullMessage = mcQuestion;
-        if (mcOptions.length > 0) {
-          fullMessage += "\n\n";
-          mcOptions.forEach((opt: any, index: number) => {
-            fullMessage += `${index + 1}. ${opt.title || opt.label || `Option ${index + 1}`}\n`;
+        // Use interactive buttons if 3 or fewer options, otherwise use numbered list
+        const useInteractiveButtons = mcOptions.length > 0 && mcOptions.length <= 3;
+
+        if (useInteractiveButtons) {
+          console.log(`[RuntimeEngine] Using WhatsApp interactive buttons (${mcOptions.length} options)`);
+
+          // Build interactive button payload
+          const buttons = mcOptions.map((opt: any, index: number) => ({
+            type: "reply",
+            reply: {
+              id: opt.id, // Use option ID as button ID
+              title: (opt.title || opt.label || `Opción ${index + 1}`).substring(0, 20), // WhatsApp limit: 20 chars
+            },
+          }));
+
+          actions.push({
+            type: "send_whatsapp_interactive",
+            to: this.context.variables.phone,
+            interactive: {
+              type: "button",
+              body: {
+                text: mcQuestion,
+              },
+              action: {
+                buttons: buttons,
+              },
+            },
           });
-          fullMessage += "\nResponde con el número de tu opción.";
+        } else {
+          // Fallback to numbered list for >3 options or no options
+          console.log(`[RuntimeEngine] Using numbered list (${mcOptions.length} options)`);
+
+          let fullMessage = mcQuestion;
+          if (mcOptions.length > 0) {
+            fullMessage += "\n\n";
+            mcOptions.forEach((opt: any, index: number) => {
+              fullMessage += `${index + 1}. ${opt.title || opt.label || `Option ${index + 1}`}\n`;
+            });
+            fullMessage += "\nResponde con el número de tu opción.";
+          }
+
+          actions.push({
+            type: "send_whatsapp",
+            to: this.context.variables.phone,
+            text: fullMessage,
+          });
         }
 
-        console.log(`[RuntimeEngine] Full WhatsApp message:\n${fullMessage}`);
         console.log(`[RuntimeEngine] ========================================`);
-
-        actions.push({
-          type: "send_whatsapp",
-          to: this.context.variables.phone,
-          text: fullMessage,
-        });
 
         // Stop here - wait for user response
         return {

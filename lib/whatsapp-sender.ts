@@ -2,19 +2,25 @@ import { prisma } from "./prisma";
 
 interface SendMessageParams {
   to: string; // Phone number
-  message: string;
+  message?: string; // For simple text messages (backward compatibility)
+  type?: "text" | "interactive" | "image" | "document" | "video" | "audio";
+  text?: { body: string };
+  interactive?: any; // Interactive message payload (buttons, lists)
+  image?: { id?: string; link?: string; caption?: string };
+  document?: { id?: string; link?: string; caption?: string; filename?: string };
+  video?: { id?: string; link?: string; caption?: string };
+  audio?: { id?: string; link?: string };
 }
 
 /**
  * Send a WhatsApp message using Cloud API
+ * Supports text, interactive (buttons/lists), and media (image/document/video/audio)
  */
-export async function sendWhatsAppMessage({
-  to,
-  message,
-}: SendMessageParams): Promise<boolean> {
+export async function sendWhatsAppMessage(params: SendMessageParams): Promise<boolean> {
+  const { to, message, type, text, interactive, image, document, video, audio } = params;
+
   console.log(`[WhatsApp Sender] ========================================`);
-  console.log(`[WhatsApp Sender] Sending message to: ${to}`);
-  console.log(`[WhatsApp Sender] Message: "${message}"`);
+  console.log(`[WhatsApp Sender] Sending ${type || 'text'} message to: ${to}`);
 
   try {
     // Get WhatsApp configuration from database
@@ -38,14 +44,44 @@ export async function sendWhatsAppMessage({
     const formattedPhone = to.replace(/[^0-9]/g, "");
     console.log(`[WhatsApp Sender] Formatted phone: ${formattedPhone} (original: ${to})`);
 
-    const requestBody = {
+    // Build request body based on message type
+    let requestBody: any = {
       messaging_product: "whatsapp",
       to: formattedPhone,
-      type: "text",
-      text: {
-        body: message,
-      },
     };
+
+    // Determine message type and build payload
+    if (type === "interactive" && interactive) {
+      // Interactive message (buttons, lists)
+      requestBody.type = "interactive";
+      requestBody.interactive = interactive;
+      console.log(`[WhatsApp Sender] Interactive message type: ${interactive.type}`);
+    } else if (type === "image" && image) {
+      // Image message
+      requestBody.type = "image";
+      requestBody.image = image;
+      console.log(`[WhatsApp Sender] Image: ${image.id || image.link}, caption: ${image.caption || 'none'}`);
+    } else if (type === "document" && document) {
+      // Document message
+      requestBody.type = "document";
+      requestBody.document = document;
+      console.log(`[WhatsApp Sender] Document: ${document.id || document.link}, filename: ${document.filename || 'none'}`);
+    } else if (type === "video" && video) {
+      // Video message
+      requestBody.type = "video";
+      requestBody.video = video;
+      console.log(`[WhatsApp Sender] Video: ${video.id || video.link}, caption: ${video.caption || 'none'}`);
+    } else if (type === "audio" && audio) {
+      // Audio message
+      requestBody.type = "audio";
+      requestBody.audio = audio;
+      console.log(`[WhatsApp Sender] Audio: ${audio.id || audio.link}`);
+    } else {
+      // Default: text message (backward compatibility)
+      requestBody.type = "text";
+      requestBody.text = text || { body: message || "" };
+      console.log(`[WhatsApp Sender] Text: "${requestBody.text.body}"`);
+    }
 
     console.log(`[WhatsApp Sender] Request body:`, JSON.stringify(requestBody, null, 2));
 

@@ -466,10 +466,114 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
         } catch (err) {
           console.error(`[Flow Execution]   ✗ Exception while sending WhatsApp message:`, err);
         }
+      } else if (action.type === "send_whatsapp_interactive") {
+        console.log(`[Flow Execution]   → send_whatsapp_interactive action`);
+        console.log(`[Flow Execution]   → To: ${action.to}`);
+        console.log(`[Flow Execution]   → Interactive type: ${action.interactive?.type}`);
+
+        try {
+          const success = await sendWhatsAppMessage({
+            to: action.to,
+            type: "interactive",
+            interactive: action.interactive,
+          });
+
+          if (!success) {
+            console.error(`[Flow Execution]   ✗ Failed to send interactive message`);
+          }
+
+          // Log the outgoing message
+          const messageText = action.interactive?.body?.text || "Interactive message";
+          await prisma.messageLog.create({
+            data: {
+              phone: action.to,
+              message: messageText,
+              status: success ? "sent" : "failed",
+            },
+          });
+
+          console.log(`[Flow Execution]   ✓ Interactive message logged (status: ${success ? 'sent' : 'failed'})`);
+        } catch (err) {
+          console.error(`[Flow Execution]   ✗ Exception while sending interactive message:`, err);
+        }
+      } else if (action.type === "send_whatsapp_media") {
+        console.log(`[Flow Execution]   → send_whatsapp_media action`);
+        console.log(`[Flow Execution]   → To: ${action.to}`);
+        console.log(`[Flow Execution]   → Media type: ${action.mediaType}`);
+
+        try {
+          const success = await sendWhatsAppMessage({
+            to: action.to,
+            type: action.mediaType as any,
+            image: action.image,
+            document: action.document,
+            video: action.video,
+            audio: action.audio,
+          });
+
+          if (!success) {
+            console.error(`[Flow Execution]   ✗ Failed to send media message`);
+          }
+
+          // Log the outgoing message
+          const caption = action.image?.caption || action.document?.caption || action.video?.caption || "Media message";
+          await prisma.messageLog.create({
+            data: {
+              phone: action.to,
+              message: `[${action.mediaType}] ${caption}`,
+              status: success ? "sent" : "failed",
+            },
+          });
+
+          console.log(`[Flow Execution]   ✓ Media message logged (status: ${success ? 'sent' : 'failed'})`);
+        } catch (err) {
+          console.error(`[Flow Execution]   ✗ Exception while sending media message:`, err);
+        }
       } else if (action.type === "assign_conversation") {
         console.log(`[Flow Execution]   → Assigning conversation to: ${action.assigneeId || 'NULL'}`);
+        console.log(`[Flow Execution]   → Assignment type: ${action.assigneeType || 'human'}`);
+
+        // Check if this is an AI agent assignment
+        if (action.assigneeType === "ai" && action.assigneeId) {
+          console.log(`[Flow Execution]   → AI agent assignment - generating reply...`);
+
+          try {
+            // Fetch AI agent details
+            const aiAgent = await prisma.aiAgent.findUnique({
+              where: { id: action.assigneeId },
+            });
+
+            if (!aiAgent) {
+              console.error(`[Flow Execution]   ✗ AI agent not found: ${action.assigneeId}`);
+            } else {
+              console.log(`[Flow Execution]   → AI agent: ${aiAgent.name}`);
+
+              // For now, send a simple greeting from the AI agent
+              // TODO: Integrate with actual AI agent API endpoint
+              const aiReply = `Hola! Soy ${aiAgent.name}, tu agente de IA. ¿En qué puedo ayudarte?`;
+
+              const success = await sendWhatsAppMessage({
+                to: phoneNumber,
+                message: aiReply,
+              });
+
+              await prisma.messageLog.create({
+                data: {
+                  phone: phoneNumber,
+                  message: aiReply,
+                  status: success ? "sent" : "failed",
+                },
+              });
+
+              console.log(`[Flow Execution]   ✓ AI agent reply sent from ${aiAgent.name}`);
+            }
+          } catch (err) {
+            console.error(`[Flow Execution]   ✗ Exception while generating AI reply:`, err);
+          }
+        }
+
         // Assignment is already handled in the runtime engine
-        console.log(`[Flow Execution]   ✓ Assignment already handled by runtime engine`);
+        console.log(`[Flow Execution]   ✓ Assignment handled by runtime engine`);
       } else {
         console.log(`[Flow Execution]   → Action type: ${action.type}`);
         console.log(`[Flow Execution]   → Details:`, action);
