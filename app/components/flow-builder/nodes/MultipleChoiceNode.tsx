@@ -110,9 +110,9 @@ export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeDat
         </div>
 
         {/* Scrollable options list + add button */}
-        <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto overflow-x-visible pr-1">
           {options.map((opt) => (
-            <div key={opt.id} className="relative flex items-center gap-2">
+            <div key={opt.id} className="relative flex items-center gap-2 mb-1">
               <input
                 className="flex-1 rounded-xl border border-[#d5d9e2] bg-white px-3 py-2 text-sm text-[#13161f] outline-none break-words min-w-0"
                 placeholder="Ingresa el título del botón"
@@ -124,7 +124,7 @@ export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeDat
               />
               <button
                 type="button"
-                className="text-xs text-[#c0392b] flex-shrink-0"
+                className="text-base text-[#c0392b] flex-shrink-0 w-6 h-6 flex items-center justify-center hover:opacity-70"
                 onClick={() => removeOption(opt.id)}
               >
                 🗑
