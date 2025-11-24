@@ -104,6 +104,49 @@ export async function GET(
   }
 }
 
+function validateFlow(nodes: any[], edges: any[]) {
+  const errors: Array<{ stepId: string; message: string }> = [];
+
+  // Build connections map
+  const connectionsByFromStep = new Map<string, typeof edges>();
+  for (const edge of edges) {
+    const list = connectionsByFromStep.get(edge.source) ?? [];
+    list.push(edge);
+    connectionsByFromStep.set(edge.source, list);
+  }
+
+  for (const node of nodes) {
+    if (node.type === "multipleChoice") {
+      const options = node.data?.options || [];
+
+      // Check for >3 options
+      if (options.length > 3) {
+        errors.push({
+          stepId: node.id,
+          message: "WhatsApp solo permite 3 opciones en una pregunta.",
+        });
+      }
+
+      // Check for options without connections
+      const stepConnections = connectionsByFromStep.get(node.id) ?? [];
+      for (const opt of options) {
+        const hasConnection = stepConnections.some(
+          (edge) => edge.sourceHandle === opt.id
+        );
+
+        if (!hasConnection) {
+          errors.push({
+            stepId: node.id,
+            message: `La opción "${opt.title || opt.id}" no tiene ningún paso conectado.`,
+          });
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -123,6 +166,16 @@ export async function PUT(
       nodeCount: nodes?.length || 0,
       edgeCount: edges?.length || 0
     });
+
+    // Validate flow before saving
+    const validationErrors = validateFlow(nodes || [], edges || []);
+    if (validationErrors.length > 0) {
+      console.log('[API PUT] Validation failed:', validationErrors);
+      return NextResponse.json(
+        { error: "Validation failed", errors: validationErrors },
+        { status: 400 }
+      );
+    }
 
     // Update flow with nodes (steps) and edges (connections)
     const flow = await prisma.$transaction(async (tx) => {

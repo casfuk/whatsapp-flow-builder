@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { NodeWrapper } from "../NodeWrapper";
+import { toast } from "sonner";
+
+const MAX_OPTIONS = 3;
 
 type MCOption = { id: string; title: string };
 
@@ -34,6 +37,11 @@ export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeDat
   };
 
   const addOption = () => {
+    if (options.length >= MAX_OPTIONS) {
+      toast.error("WhatsApp solo permite 3 botones por mensaje.");
+      return;
+    }
+
     // Generate stable sequential ID by finding the highest existing number
     const maxNum = options.reduce((max, opt) => {
       const match = opt.id.match(/option-(\d+)/);
@@ -138,8 +146,9 @@ export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeDat
 
           <button
             type="button"
-            className="w-full rounded-full bg-[#5ac230] py-2 text-sm font-semibold text-white"
+            className="w-full rounded-full bg-[#5ac230] py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={addOption}
+            disabled={options.length >= MAX_OPTIONS}
           >
             Agregar nueva opción
           </button>

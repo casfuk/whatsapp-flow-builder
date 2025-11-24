@@ -565,29 +565,62 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
         console.log(`[Flow Execution]   → To: ${action.to}`);
         console.log(`[Flow Execution]   → Media type: ${action.mediaType}`);
 
-        const mediaId = action.image?.id || action.document?.id || action.video?.id || action.audio?.id;
+        const mediaId = action.mediaId || action.image?.id || action.document?.id || action.video?.id || action.audio?.id;
+        const caption = action.caption || action.image?.caption || action.document?.caption || action.video?.caption || "";
         console.log(`[Flow Execution] Sending media:`, mediaId, action.mediaType);
 
         try {
-          const success = await sendWhatsAppMessage({
-            to: action.to,
-            type: action.mediaType as any,
-            image: action.image,
-            document: action.document,
-            video: action.video,
-            audio: action.audio,
-          });
+          let success = false;
+
+          // Handle new structure (mediaId + mediaType)
+          if (action.mediaId) {
+            if (action.mediaType === "image" || action.mediaType === "media") {
+              success = await sendWhatsAppMessage({
+                to: action.to,
+                type: "image",
+                image: { id: mediaId, caption },
+              });
+            } else if (action.mediaType === "audio") {
+              success = await sendWhatsAppMessage({
+                to: action.to,
+                type: "audio",
+                audio: { id: mediaId },
+              });
+            } else if (action.mediaType === "document") {
+              success = await sendWhatsAppMessage({
+                to: action.to,
+                type: "document",
+                document: { id: mediaId, caption },
+              });
+            } else {
+              console.error(`[Flow Execution] Unknown mediaType: ${action.mediaType}`);
+            }
+          } else {
+            // Handle old structure (image/document/video/audio objects)
+            success = await sendWhatsAppMessage({
+              to: action.to,
+              type: action.mediaType as any,
+              image: action.image,
+              document: action.document,
+              video: action.video,
+              audio: action.audio,
+            });
+          }
 
           if (!success) {
             console.error(`[Flow Execution]   ✗ Failed to send media message`);
+            // Fallback text
+            await sendWhatsAppMessage({
+              to: action.to,
+              message: "No he podido enviar el archivo ahora mismo, lo siento.",
+            });
           }
 
           // Log the outgoing message
-          const caption = action.image?.caption || action.document?.caption || action.video?.caption || "Media message";
           await prisma.messageLog.create({
             data: {
               phone: action.to,
-              message: `[${action.mediaType}] ${caption}`,
+              message: `[${action.mediaType}] ${caption || "Media"}`,
               status: success ? "sent" : "failed",
             },
           });
@@ -595,6 +628,15 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
           console.log(`[Flow Execution]   ✓ Media message logged (status: ${success ? 'sent' : 'failed'})`);
         } catch (err) {
           console.error(`[Flow Execution]   ✗ Exception while sending media message:`, err);
+          // Fallback text
+          try {
+            await sendWhatsAppMessage({
+              to: action.to,
+              message: "No he podido enviar el archivo ahora mismo, lo siento.",
+            });
+          } catch (fallbackErr) {
+            console.error(`[Flow Execution]   ✗ Fallback also failed:`, fallbackErr);
+          }
         }
       } else if (action.type === "assign_conversation") {
         console.log(`[Flow Execution]   → Assigning conversation to: ${action.assigneeId || 'NULL'}`);
@@ -854,24 +896,61 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
           console.log(`[Flow Continue]   → Sending media message to ${action.to}`);
           console.log(`[Flow Continue]   → Media type: ${action.mediaType}`);
 
-          const mediaId = action.image?.id || action.document?.id || action.video?.id || action.audio?.id;
+          const mediaId = action.mediaId || action.image?.id || action.document?.id || action.video?.id || action.audio?.id;
+          const caption = action.caption || action.image?.caption || action.document?.caption || action.video?.caption || "";
           console.log(`[Flow Continue] Sending media:`, mediaId, action.mediaType);
 
           try {
-            const success = await sendWhatsAppMessage({
-              to: action.to,
-              type: action.mediaType as any,
-              image: action.image,
-              document: action.document,
-              video: action.video,
-              audio: action.audio,
-            });
+            let success = false;
 
-            const caption = action.image?.caption || action.document?.caption || action.video?.caption || "Media";
+            // Handle new structure (mediaId + mediaType)
+            if (action.mediaId) {
+              if (action.mediaType === "image" || action.mediaType === "media") {
+                success = await sendWhatsAppMessage({
+                  to: action.to,
+                  type: "image",
+                  image: { id: mediaId, caption },
+                });
+              } else if (action.mediaType === "audio") {
+                success = await sendWhatsAppMessage({
+                  to: action.to,
+                  type: "audio",
+                  audio: { id: mediaId },
+                });
+              } else if (action.mediaType === "document") {
+                success = await sendWhatsAppMessage({
+                  to: action.to,
+                  type: "document",
+                  document: { id: mediaId, caption },
+                });
+              } else {
+                console.error(`[Flow Continue] Unknown mediaType: ${action.mediaType}`);
+              }
+            } else {
+              // Handle old structure (image/document/video/audio objects)
+              success = await sendWhatsAppMessage({
+                to: action.to,
+                type: action.mediaType as any,
+                image: action.image,
+                document: action.document,
+                video: action.video,
+                audio: action.audio,
+              });
+            }
+
+            if (!success) {
+              console.error(`[Flow Continue]   ✗ Failed to send media`);
+              // Fallback text
+              await sendWhatsAppMessage({
+                to: action.to,
+                message: "No he podido enviar el archivo ahora mismo, lo siento.",
+              });
+            }
+
             await prisma.messageLog.create({
               data: {
                 phone: action.to,
-                message: `[${action.mediaType}] ${caption}`,
+                message: `[${action.mediaType}] ${caption || "Media"}`,
                 status: success ? "sent" : "failed",
               },
             });
@@ -879,13 +958,11 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
             console.log(`[Flow Continue]   ✓ Media ${success ? 'sent' : 'failed'}`);
           } catch (err) {
             console.error(`[Flow Continue]   ✗ Exception sending media:`, err);
-            // Fallback: send caption as text
+            // Fallback: send error message
             try {
-              const caption = action.image?.caption || action.document?.caption || action.video?.caption || "Media message";
-              console.log(`[Flow Continue]   → Fallback to text: "${caption}"`);
               await sendWhatsAppMessage({
                 to: action.to,
-                message: caption,
+                message: "No he podido enviar el archivo ahora mismo, lo siento.",
               });
             } catch (fallbackErr) {
               console.error(`[Flow Continue]   ✗ Fallback also failed:`, fallbackErr);
