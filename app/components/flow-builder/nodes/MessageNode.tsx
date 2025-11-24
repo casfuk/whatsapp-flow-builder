@@ -23,16 +23,25 @@ type MediaMessageData = BaseMessageData & {
   type: "media";
   fileUrl?: string;
   caption?: string;
+  mediaId?: string;
+  mediaType?: string;
+  fileName?: string;
 };
 
 type AudioMessageData = BaseMessageData & {
   type: "audio";
   fileUrl?: string;
+  mediaId?: string;
+  mediaType?: string;
+  fileName?: string;
 };
 
 type DocumentMessageData = BaseMessageData & {
   type: "document";
   fileUrl?: string;
+  mediaId?: string;
+  mediaType?: string;
+  fileName?: string;
 };
 
 type ContactMessageData = BaseMessageData & {
@@ -107,6 +116,50 @@ export function MessageNode({ data, selected, id }: NodeProps<MessageNodeProps>)
     data.onChange?.(partial);
   };
 
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>((data as any).fileName || null);
+
+  const handleFileUpload = async (
+    file: File,
+    kind: "media" | "audio" | "document"
+  ) => {
+    try {
+      setIsUploading(true);
+      setUploadedFileName(null);
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("[MessageNode] Upload failed:", text);
+        toast.error("No se ha podido subir el archivo. Inténtalo de nuevo.");
+        return;
+      }
+
+      const json = await res.json();
+
+      updateData({
+        type: kind,
+        mediaType: kind === "media" ? "image" : kind,
+        mediaId: json.fileId,
+        fileName: json.fileName,
+      });
+
+      setUploadedFileName(json.fileName);
+    } catch (err) {
+      console.error("[MessageNode] Upload error:", err);
+      toast.error("Ha ocurrido un error al subir el archivo.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const typeButton = (type: MessageType, label: string) => {
     const isSelected = messageType === type;
     return (
@@ -157,9 +210,9 @@ export function MessageNode({ data, selected, id }: NodeProps<MessageNodeProps>)
 
           {/* SUB-FORMS - Conditional on messageType */}
           {messageType === "text" && <TextForm data={data} updateData={updateData} delaySeconds={delaySeconds} />}
-          {messageType === "media" && <MediaForm data={data} updateData={updateData} delaySeconds={delaySeconds} />}
-          {messageType === "audio" && <AudioForm data={data} updateData={updateData} delaySeconds={delaySeconds} />}
-          {messageType === "document" && <DocumentForm data={data} updateData={updateData} delaySeconds={delaySeconds} />}
+          {messageType === "media" && <MediaForm data={data} updateData={updateData} delaySeconds={delaySeconds} handleFileUpload={handleFileUpload} isUploading={isUploading} uploadedFileName={uploadedFileName} />}
+          {messageType === "audio" && <AudioForm data={data} updateData={updateData} delaySeconds={delaySeconds} handleFileUpload={handleFileUpload} isUploading={isUploading} uploadedFileName={uploadedFileName} setUploadedFileName={setUploadedFileName} />}
+          {messageType === "document" && <DocumentForm data={data} updateData={updateData} delaySeconds={delaySeconds} handleFileUpload={handleFileUpload} isUploading={isUploading} uploadedFileName={uploadedFileName} />}
           {messageType === "contact" && <ContactForm data={data} updateData={updateData} delaySeconds={delaySeconds} />}
 
           {/* Próximo paso label */}
@@ -250,57 +303,24 @@ function MediaForm({
   data,
   updateData,
   delaySeconds,
+  handleFileUpload,
+  isUploading,
+  uploadedFileName,
 }: {
   data: any;
   updateData: (p: any) => void;
   delaySeconds: number;
+  handleFileUpload: (file: File, kind: "media" | "audio" | "document") => Promise<void>;
+  isUploading: boolean;
+  uploadedFileName: string | null;
 }) {
   const fileUrl = (data as MediaMessageData).fileUrl ?? "";
   const caption = (data as MediaMessageData).caption ?? "";
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(data.fileName || null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsUploading(true);
-      setUploadedFileName(null);
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-
-      if (!res.ok) {
-        console.error("Upload failed", await res.text());
-        toast.error("No se ha podido subir el archivo. Inténtalo de nuevo.");
-        return;
-      }
-
-      const json = await res.json();
-
-      // Determine media type from file
-      const fileType = file.type.startsWith("image/") ? "image" : "media";
-
-      // Update node data with mediaId
-      updateData({
-        type: "media",
-        mediaType: fileType,
-        mediaId: json.fileId,
-        fileName: json.fileName,
-        caption: caption,
-      } as any);
-
-      setUploadedFileName(json.fileName);
-    } catch (error) {
-      console.error("Error uploading media:", error);
-      toast.error("Ha ocurrido un error al subir el archivo.");
-    } finally {
-      setIsUploading(false);
-    }
+    if (file) handleFileUpload(file, "media");
   };
 
   return (
@@ -399,10 +419,18 @@ function AudioForm({
   data,
   updateData,
   delaySeconds,
+  handleFileUpload,
+  isUploading,
+  uploadedFileName,
+  setUploadedFileName,
 }: {
   data: any;
   updateData: (p: any) => void;
   delaySeconds: number;
+  handleFileUpload: (file: File, kind: "media" | "audio" | "document") => Promise<void>;
+  isUploading: boolean;
+  uploadedFileName: string | null;
+  setUploadedFileName: (name: string | null) => void;
 }) {
   const fileUrl = (data as AudioMessageData).fileUrl ?? "";
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -413,45 +441,10 @@ function AudioForm({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordingError, setRecordingError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(data.fileName || null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsUploading(true);
-      setUploadedFileName(null);
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-
-      if (!res.ok) {
-        console.error("Upload failed", await res.text());
-        toast.error("No se ha podido subir el archivo. Inténtalo de nuevo.");
-        return;
-      }
-
-      const json = await res.json();
-
-      // Update node data with mediaId
-      updateData({
-        type: "audio",
-        mediaType: "audio",
-        mediaId: json.fileId,
-        fileName: json.fileName,
-      } as any);
-
-      setUploadedFileName(json.fileName);
-    } catch (error) {
-      console.error("Error uploading audio:", error);
-      toast.error("Ha ocurrido un error al subir el archivo.");
-    } finally {
-      setIsUploading(false);
-    }
+    if (file) handleFileUpload(file, "audio");
   };
 
   const startRecording = async () => {
@@ -479,30 +472,11 @@ function AudioForm({
       // Handle recording stop
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
 
-        // Upload audioBlob to server
-        try {
-          const formData = new FormData();
-          formData.append("file", audioBlob, "recording.webm");
-          const upload = await fetch("/api/upload", { method: "POST", body: formData });
-          const json = await upload.json();
-
-          // Save uploaded media ID and set message type
-          updateData({
-            type: "audio",
-            mediaType: "audio",
-            mediaId: json.fileId,
-            fileName: "grabación.webm",
-          } as any);
-
-          setUploadedFileName("grabación.webm");
-        } catch (error) {
-          console.error('Error uploading audio:', error);
-          toast.error("Ha ocurrido un error al subir la grabación.");
-          // Fallback to blob URL if upload fails
-          updateData({ fileUrl: audioUrl });
-        }
+        // Convert blob to File and upload using centralized handler
+        const audioFile = new File([audioBlob], "recording.webm", { type: 'audio/webm' });
+        await handleFileUpload(audioFile, "audio");
+        setUploadedFileName("grabación.webm");
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -628,14 +602,13 @@ function AudioForm({
           </div>
         )}
 
-        {fileUrl && (
-          <div className="flex items-center gap-2 p-2 bg-white border border-[#D2D4E4] rounded-lg">
-            <span className="text-xs">🔊</span>
-            <p className="text-[11px] text-[#2C2F4A] truncate flex-1">
-              {fileUrl.startsWith('blob:') ? 'Audio grabado' : `Archivo: ${fileUrl.substring(fileUrl.lastIndexOf("/") + 1)}`}
-            </p>
-          </div>
-        )}
+        <p className="text-[11px] text-[#656889] mt-1">
+          {isUploading
+            ? "Archivo: Subiendo..."
+            : uploadedFileName
+            ? `Archivo: ${uploadedFileName}`
+            : "Ningún archivo seleccionado"}
+        </p>
       </div>
 
       {/* Delay Control (5-60) */}
@@ -653,52 +626,23 @@ function DocumentForm({
   data,
   updateData,
   delaySeconds,
+  handleFileUpload,
+  isUploading,
+  uploadedFileName,
 }: {
   data: any;
   updateData: (p: any) => void;
   delaySeconds: number;
+  handleFileUpload: (file: File, kind: "media" | "audio" | "document") => Promise<void>;
+  isUploading: boolean;
+  uploadedFileName: string | null;
 }) {
   const fileUrl = (data as DocumentMessageData).fileUrl ?? "";
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(data.fileName || null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsUploading(true);
-      setUploadedFileName(null);
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-
-      if (!res.ok) {
-        console.error("Upload failed", await res.text());
-        toast.error("No se ha podido subir el archivo. Inténtalo de nuevo.");
-        return;
-      }
-
-      const json = await res.json();
-
-      // Update node data with mediaId
-      updateData({
-        type: "document",
-        mediaType: "document",
-        mediaId: json.fileId,
-        fileName: json.fileName,
-      } as any);
-
-      setUploadedFileName(json.fileName);
-    } catch (error) {
-      console.error("Error uploading document:", error);
-      toast.error("Ha ocurrido un error al subir el archivo.");
-    } finally {
-      setIsUploading(false);
-    }
+    if (file) handleFileUpload(file, "document");
   };
 
   return (

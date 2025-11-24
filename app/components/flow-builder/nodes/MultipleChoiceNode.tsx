@@ -110,7 +110,7 @@ export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeDat
         </div>
 
         {/* Scrollable options list + add button */}
-        <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto overflow-x-visible pr-1">
+        <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto overflow-x-visible pr-3">
           {options.map((opt) => (
             <div key={opt.id} className="relative flex items-center gap-2 mb-1">
               <input
