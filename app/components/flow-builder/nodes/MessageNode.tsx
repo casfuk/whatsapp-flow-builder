@@ -368,6 +368,13 @@ function AudioForm({
 }) {
   const fileUrl = (data as AudioMessageData).fileUrl ?? "";
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -376,6 +383,77 @@ function AudioForm({
       const mockUrl = URL.createObjectURL(file);
       updateData({ fileUrl: mockUrl });
     }
+  };
+
+  const startRecording = async () => {
+    try {
+      setRecordingError(null);
+
+      // Request microphone permission
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Create MediaRecorder
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm',
+      });
+
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      // Collect audio chunks
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      // Handle recording stop
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        // TODO: Upload audioBlob to server and get real URL
+        // For now, use blob URL
+        updateData({ fileUrl: audioUrl });
+
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+
+        // Clear timer
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+      };
+
+      // Start recording
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      // Start timer
+      timerIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      setRecordingError('No se pudo acceder al micrófono. Por favor, permite el acceso.');
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -418,7 +496,10 @@ function AudioForm({
               e.stopPropagation();
               fileInputRef.current?.click();
             }}
-            className="flex-1 py-2 px-4 bg-[#10B981] text-white rounded-lg text-xs font-medium hover:bg-[#059669]"
+            disabled={isRecording}
+            className={`flex-1 py-2 px-4 bg-[#10B981] text-white rounded-lg text-xs font-medium ${
+              isRecording ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#059669]'
+            }`}
           >
             Cargar archivo
           </button>
@@ -426,18 +507,46 @@ function AudioForm({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              // TODO: Implement audio recording
-              alert("Grabación de audio - por implementar");
+              if (isRecording) {
+                stopRecording();
+              } else {
+                startRecording();
+              }
             }}
-            className="flex-1 py-2 px-4 bg-[#6B7280] text-white rounded-lg text-xs font-medium hover:bg-[#4B5563]"
+            className={`flex-1 py-2 px-4 text-white rounded-lg text-xs font-medium ${
+              isRecording
+                ? 'bg-[#EF4444] hover:bg-[#DC2626]'
+                : 'bg-[#6B7280] hover:bg-[#4B5563]'
+            }`}
           >
-            Grabar audio
+            {isRecording ? '⏹ Detener' : '🎤 Grabar audio'}
           </button>
         </div>
+
+        {/* Recording indicator */}
+        {isRecording && (
+          <div className="flex items-center gap-2 p-2 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg">
+            <div className="w-3 h-3 bg-[#EF4444] rounded-full animate-pulse"></div>
+            <span className="text-xs font-medium text-[#991B1B]">
+              Grabando... {formatTime(recordingTime)}
+            </span>
+          </div>
+        )}
+
+        {/* Error message */}
+        {recordingError && (
+          <div className="p-2 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg">
+            <p className="text-xs text-[#991B1B]">{recordingError}</p>
+          </div>
+        )}
+
         {fileUrl && (
-          <p className="text-[11px] text-[#2C2F4A] truncate">
-            Archivo: {fileUrl.substring(fileUrl.lastIndexOf("/") + 1)}
-          </p>
+          <div className="flex items-center gap-2 p-2 bg-white border border-[#D2D4E4] rounded-lg">
+            <span className="text-xs">🔊</span>
+            <p className="text-[11px] text-[#2C2F4A] truncate flex-1">
+              {fileUrl.startsWith('blob:') ? 'Audio grabado' : `Archivo: ${fileUrl.substring(fileUrl.lastIndexOf("/") + 1)}`}
+            </p>
+          </div>
         )}
       </div>
 
