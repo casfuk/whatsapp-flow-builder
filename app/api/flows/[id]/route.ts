@@ -69,11 +69,24 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    console.log(`[API PUT /api/flows/${id}] Request received`);
+
     const body = await request.json();
+    console.log('[API PUT] Request body:', JSON.stringify(body, null, 2));
+
     const { name, description, isActive, nodes, edges } = body;
+
+    console.log('[API PUT] Parsed data:', {
+      name,
+      isActive,
+      nodeCount: nodes?.length || 0,
+      edgeCount: edges?.length || 0
+    });
 
     // Update flow with nodes (steps) and edges (connections)
     const flow = await prisma.$transaction(async (tx) => {
+      console.log('[API PUT] Starting transaction...');
+
       // Update flow metadata
       await tx.flow.update({
         where: { id },
@@ -83,40 +96,49 @@ export async function PUT(
           isActive: isActive !== undefined ? isActive : false,
         },
       });
+      console.log('[API PUT] Flow metadata updated');
 
       // Delete existing connections and steps
       await tx.flowConnection.deleteMany({ where: { flowId: id } });
       await tx.flowStep.deleteMany({ where: { flowId: id } });
+      console.log('[API PUT] Deleted existing steps and connections');
 
       // Create new steps from nodes
       if (nodes && nodes.length > 0) {
         // Debug logging for question nodes
-        nodes.forEach((node: any) => {
-          if (node.type === "question_multiple" || node.type === "question_simple") {
-            console.log(`[Flow Update] ${node.type} node (id: ${node.id}):`, {
-              questionText: node.data.questionText,
-              buttons: node.data.buttons,
-              saveToFieldId: node.data.saveToFieldId,
-              allData: node.data
-            });
-          }
+        const questionNodes = nodes.filter((n: any) =>
+          n.type === 'question_multiple' || n.type === 'question_simple'
+        );
+
+        console.log(`[API PUT] Found ${questionNodes.length} question node(s)`);
+        questionNodes.forEach((node: any) => {
+          console.log(`[API PUT] Question node ${node.id}:`, {
+            type: node.type,
+            questionText: node.data?.questionText,
+            buttons: node.data?.buttons,
+            saveToFieldId: node.data?.saveToFieldId,
+            fullData: node.data
+          });
         });
 
-        await tx.flowStep.createMany({
-          data: nodes.map((node: any) => ({
-            id: node.id,
-            flowId: id,
-            type: node.type || "default",
-            label: node.data.label || node.type || "Step",
-            configJson: JSON.stringify(node.data),
-            positionX: Math.round(node.position.x),
-            positionY: Math.round(node.position.y),
-          })),
-        });
+        const stepsData = nodes.map((node: any) => ({
+          id: node.id,
+          flowId: id,
+          type: node.type || "default",
+          label: node.data.label || node.type || "Step",
+          configJson: JSON.stringify(node.data),
+          positionX: Math.round(node.position.x),
+          positionY: Math.round(node.position.y),
+        }));
+
+        console.log('[API PUT] Creating', stepsData.length, 'steps...');
+        await tx.flowStep.createMany({ data: stepsData });
+        console.log('[API PUT] Steps created successfully');
       }
 
       // Create new connections from edges
       if (edges && edges.length > 0) {
+        console.log('[API PUT] Creating', edges.length, 'connections...');
         await tx.flowConnection.createMany({
           data: edges.map((edge: any) => ({
             flowId: id,
@@ -126,10 +148,14 @@ export async function PUT(
             sourceHandle: edge.sourceHandle || null,
           })),
         });
+        console.log('[API PUT] Connections created successfully');
       }
+
+      console.log('[API PUT] Transaction complete');
     });
 
     // Return updated flow
+    console.log('[API PUT] Fetching updated flow with steps and connections...');
     const fullFlow = await prisma.flow.findUnique({
       where: { id },
       include: {
@@ -138,13 +164,23 @@ export async function PUT(
       },
     });
 
+    if (!fullFlow) {
+      console.error('[API PUT] Flow not found after update!');
+      return NextResponse.json(
+        { error: "Flow not found after update" },
+        { status: 404 }
+      );
+    }
+
+    console.log('[API PUT] Flow fetched, converting to React Flow format...');
+
     // Convert steps to React Flow nodes format
-    const savedNodes = fullFlow!.steps.map((step) => {
+    const savedNodes = fullFlow.steps.map((step) => {
       let config = {};
       try {
         config = JSON.parse(step.configJson);
       } catch (e) {
-        console.error("Failed to parse step config:", e);
+        console.error("[API PUT] Failed to parse step config:", e);
       }
 
       return {
@@ -159,7 +195,7 @@ export async function PUT(
     });
 
     // Convert connections to React Flow edges format
-    const savedEdges = fullFlow!.connections.map((conn) => ({
+    const savedEdges = fullFlow.connections.map((conn) => ({
       id: conn.id,
       source: conn.fromStepId,
       target: conn.toStepId,
@@ -167,13 +203,16 @@ export async function PUT(
       sourceHandle: conn.sourceHandle || undefined,
     }));
 
+    console.log('[API PUT] Returning response with', savedNodes.length, 'nodes and', savedEdges.length, 'edges');
+
     return NextResponse.json({
       ...fullFlow,
       nodes: savedNodes,
       edges: savedEdges,
     });
   } catch (error: any) {
-    console.error("Update flow error:", error);
+    console.error("[API PUT] Update flow error:", error);
+    console.error("[API PUT] Error stack:", error.stack);
     return NextResponse.json(
       {
         error: "Failed to update flow",
