@@ -506,7 +506,7 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
     // Find the next step based on user's reply
     let nextStepId: string | null = null;
 
-    if (currentStep.type === "question_multiple" || currentStep.type === "question_simple") {
+    if (currentStep.type === "question_multiple" || currentStep.type === "question_simple" || currentStep.type === "multipleChoice") {
       // For question nodes, find the connection that matches the reply
       const outgoingConnections = flow.connections.filter(
         (c: any) => c.fromStepId === currentStep.id
@@ -515,23 +515,52 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
       console.log(`[Flow Continue] Found ${outgoingConnections.length} outgoing connection(s)`);
 
       if (outgoingConnections.length > 0) {
-        // Try to match reply with connection labels or handles
         const normalizedReply = userReply.toLowerCase().trim();
 
-        for (const conn of outgoingConnections) {
-          const sourceHandle = conn.sourceHandle?.toLowerCase().trim();
-          const conditionLabel = conn.conditionLabel?.toLowerCase().trim();
+        // For multipleChoice, try to match numeric replies (1, 2, 3) to option index
+        if (currentStep.type === "multipleChoice") {
+          const currentConfig = JSON.parse(currentStep.configJson);
+          const options = currentConfig.options || [];
 
-          console.log(`[Flow Continue] Checking connection - handle: "${sourceHandle}", label: "${conditionLabel}"`);
+          console.log(`[Flow Continue] multipleChoice with ${options.length} options`);
 
-          if (sourceHandle && normalizedReply.includes(sourceHandle)) {
-            nextStepId = conn.toStepId;
-            console.log(`[Flow Continue] ✓ Matched source handle "${sourceHandle}"`);
-            break;
-          } else if (conditionLabel && normalizedReply.includes(conditionLabel)) {
-            nextStepId = conn.toStepId;
-            console.log(`[Flow Continue] ✓ Matched condition label "${conditionLabel}"`);
-            break;
+          // Check if reply is a number (1, 2, 3, etc.)
+          const replyNumber = parseInt(normalizedReply, 10);
+          if (!isNaN(replyNumber) && replyNumber >= 1 && replyNumber <= options.length) {
+            const selectedOption = options[replyNumber - 1];
+            console.log(`[Flow Continue] User selected option ${replyNumber}: ${selectedOption.id}`);
+
+            // Find connection with matching sourceHandle
+            const matchedConn = outgoingConnections.find(
+              (c: any) => c.sourceHandle === selectedOption.id
+            );
+
+            if (matchedConn) {
+              nextStepId = matchedConn.toStepId;
+              console.log(`[Flow Continue] ✓ Matched option ${replyNumber} (ID: ${selectedOption.id}) to connection`);
+            }
+          } else {
+            console.log(`[Flow Continue] Reply "${userReply}" is not a valid numeric option (1-${options.length})`);
+          }
+        }
+
+        // If still no match, try matching with connection labels or handles (for other question types)
+        if (!nextStepId) {
+          for (const conn of outgoingConnections) {
+            const sourceHandle = conn.sourceHandle?.toLowerCase().trim();
+            const conditionLabel = conn.conditionLabel?.toLowerCase().trim();
+
+            console.log(`[Flow Continue] Checking connection - handle: "${sourceHandle}", label: "${conditionLabel}"`);
+
+            if (sourceHandle && normalizedReply.includes(sourceHandle)) {
+              nextStepId = conn.toStepId;
+              console.log(`[Flow Continue] ✓ Matched source handle "${sourceHandle}"`);
+              break;
+            } else if (conditionLabel && normalizedReply.includes(conditionLabel)) {
+              nextStepId = conn.toStepId;
+              console.log(`[Flow Continue] ✓ Matched condition label "${conditionLabel}"`);
+              break;
+            }
           }
         }
 

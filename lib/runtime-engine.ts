@@ -122,6 +122,45 @@ export class RuntimeEngine {
           shouldStop: true,
         };
 
+      case "multipleChoice":
+        // Handle multipleChoice nodes (MultipleChoiceNode.tsx)
+        const mcMessage = config.message || config.questionText || "";
+        const mcQuestion = this.interpolateVariables(mcMessage);
+        const mcOptions = config.options || [];
+
+        console.log(`[RuntimeEngine] ========================================`);
+        console.log(`[RuntimeEngine] Executing multipleChoice step: ${step.id}`);
+        console.log(`[RuntimeEngine] Contact: ${this.context.variables.phone}`);
+        console.log(`[RuntimeEngine] Question text: "${mcQuestion}"`);
+        console.log(`[RuntimeEngine] Options count: ${mcOptions.length}`);
+        console.log(`[RuntimeEngine] Options:`, mcOptions.map((opt: any) => `${opt.id}: "${opt.title}"`));
+
+        // Build the message with numbered options
+        let fullMessage = mcQuestion;
+        if (mcOptions.length > 0) {
+          fullMessage += "\n\n";
+          mcOptions.forEach((opt: any, index: number) => {
+            fullMessage += `${index + 1}. ${opt.title || opt.label || `Option ${index + 1}`}\n`;
+          });
+          fullMessage += "\nResponde con el número de tu opción.";
+        }
+
+        console.log(`[RuntimeEngine] Full WhatsApp message:\n${fullMessage}`);
+        console.log(`[RuntimeEngine] ========================================`);
+
+        actions.push({
+          type: "send_whatsapp",
+          to: this.context.variables.phone,
+          text: fullMessage,
+        });
+
+        // Stop here - wait for user response
+        return {
+          actions,
+          nextStepId: null,
+          shouldStop: true,
+        };
+
       case "wait":
         const duration = config.duration || 5;
         actions.push({
