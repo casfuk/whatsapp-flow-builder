@@ -16,7 +16,7 @@ type MultipleChoiceNodeData = {
 export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeData>) {
   const [message, setMessage] = useState(data.message ?? "");
   const [options, setOptions] = useState<MCOption[]>(
-    data.options?.length ? data.options : [{ id: "opt-1", title: "" }]
+    data.options?.length ? data.options : [{ id: "option-1", title: "" }]
   );
   const [validateWithAI, setValidateWithAI] = useState(
     data.validateWithAI ?? false
@@ -34,7 +34,12 @@ export function MultipleChoiceNode({ id, data }: NodeProps<MultipleChoiceNodeDat
   };
 
   const addOption = () => {
-    const newId = crypto.randomUUID?.() ?? `opt-${Date.now()}`;
+    // Generate stable sequential ID by finding the highest existing number
+    const maxNum = options.reduce((max, opt) => {
+      const match = opt.id.match(/option-(\d+)/);
+      return match ? Math.max(max, parseInt(match[1], 10)) : max;
+    }, 0);
+    const newId = `option-${maxNum + 1}`;
     setOptions((prev) => [
       ...prev,
       { id: newId, title: "" },

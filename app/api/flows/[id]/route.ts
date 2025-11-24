@@ -48,10 +48,51 @@ export async function GET(
       sourceHandle: conn.sourceHandle || undefined,
     }));
 
+    // Migration: Fix multipleChoice nodes to have options for all their connections
+    console.log('[API GET] Running multipleChoice migration...');
+    const migratedNodes = nodes.map((node) => {
+      if (node.type === 'multipleChoice') {
+        // Find all connections from this node
+        const nodeConnections = flow.connections.filter(
+          (conn) => conn.fromStepId === node.id && conn.sourceHandle
+        );
+
+        // Get unique sourceHandles
+        const sourceHandles = [...new Set(nodeConnections.map((conn) => conn.sourceHandle))];
+
+        console.log(`[API GET Migration] MultipleChoice node ${node.id}:`, {
+          existingOptions: (node.data as any).options || [],
+          sourceHandlesInConnections: sourceHandles,
+          connectionCount: nodeConnections.length
+        });
+
+        // Ensure node.data.options exists and includes all sourceHandles
+        const nodeData = node.data as any;
+        const existingOptions = nodeData.options || [];
+        const existingOptionIds = new Set(existingOptions.map((opt: any) => opt.id));
+
+        // Add missing options for any sourceHandles not in the options array
+        const missingOptions = sourceHandles
+          .filter((handle) => handle && !existingOptionIds.has(handle))
+          .map((handle) => ({
+            id: handle,
+            title: "", // Empty title as placeholder
+          }));
+
+        if (missingOptions.length > 0) {
+          console.log(`[API GET Migration] Adding ${missingOptions.length} missing options to node ${node.id}:`, missingOptions);
+          nodeData.options = [...existingOptions, ...missingOptions];
+        }
+
+        console.log(`[API GET Migration] Final options for node ${node.id}:`, nodeData.options);
+      }
+      return node;
+    });
+
     // Return flow with converted nodes and edges
     return NextResponse.json({
       ...flow,
-      nodes,
+      nodes: migratedNodes,
       edges,
     });
   } catch (error) {
@@ -105,8 +146,48 @@ export async function PUT(
 
       // Create new steps from nodes
       if (nodes && nodes.length > 0) {
+        // Migration: Fix multipleChoice nodes to have options for all their connections
+        console.log('[API PUT] Running multipleChoice migration...');
+        const migratedNodes = nodes.map((node: any) => {
+          if (node.type === 'multipleChoice') {
+            // Find all edges from this node
+            const nodeEdges = edges?.filter(
+              (edge: any) => edge.source === node.id && edge.sourceHandle
+            ) || [];
+
+            // Get unique sourceHandles
+            const sourceHandles = [...new Set(nodeEdges.map((edge: any) => edge.sourceHandle))];
+
+            console.log(`[API PUT Migration] MultipleChoice node ${node.id}:`, {
+              existingOptions: node.data?.options || [],
+              sourceHandlesInEdges: sourceHandles,
+              edgeCount: nodeEdges.length
+            });
+
+            // Ensure node.data.options exists and includes all sourceHandles
+            const existingOptions = node.data?.options || [];
+            const existingOptionIds = new Set(existingOptions.map((opt: any) => opt.id));
+
+            // Add missing options for any sourceHandles not in the options array
+            const missingOptions = sourceHandles
+              .filter((handle) => handle && !existingOptionIds.has(handle))
+              .map((handle) => ({
+                id: handle,
+                title: "", // Empty title as placeholder - user can fill this in
+              }));
+
+            if (missingOptions.length > 0) {
+              console.log(`[API PUT Migration] Adding ${missingOptions.length} missing options to node ${node.id}:`, missingOptions);
+              node.data.options = [...existingOptions, ...missingOptions];
+            }
+
+            console.log(`[API PUT Migration] Final options for node ${node.id}:`, node.data.options);
+          }
+          return node;
+        });
+
         // Debug logging for question nodes
-        const questionNodes = nodes.filter((n: any) =>
+        const questionNodes = migratedNodes.filter((n: any) =>
           n.type === 'question_multiple' || n.type === 'question_simple'
         );
 
@@ -121,7 +202,7 @@ export async function PUT(
           });
         });
 
-        const stepsData = nodes.map((node: any) => ({
+        const stepsData = migratedNodes.map((node: any) => ({
           id: node.id,
           flowId: id,
           type: node.type || "default",
