@@ -180,6 +180,7 @@ export class RuntimeEngine {
           });
         }
 
+        // Continue to next node (e.g., to reach multipleChoice after intro message)
         return {
           actions,
           nextStepId: this.getNextStepId(step.id),

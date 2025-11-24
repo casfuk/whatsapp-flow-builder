@@ -192,7 +192,17 @@ export async function POST(request: NextRequest) {
       console.log(`[Webhook] Current step: ${existingSession.currentStepId}`);
       console.log(`[Webhook] User replied with: "${messageText}"`);
 
-      // Check if this session is assigned to an AI agent
+      // Check if message is a trigger keyword - if so, treat as new flow start, not reply
+      const isTriggerKeyword = await checkIfTriggerKeyword(messageText);
+      if (isTriggerKeyword) {
+        console.log(`[Webhook] Message "${messageText}" is a trigger keyword - marking session as completed and starting new flow`);
+        await prisma.sessionState.update({
+          where: { sessionId: existingSession.sessionId },
+          data: { status: "completed" },
+        });
+        // Fall through to flow trigger logic below
+      } else {
+        // Check if this session is assigned to an AI agent
       if (existingSession.assigneeType === "ai" && existingSession.assigneeId) {
         console.log(`[Webhook] Session assigned to AI agent: ${existingSession.assigneeId}`);
 
@@ -258,10 +268,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "flow not found" });
       }
 
-      // Continue the flow from the current step
-      await continueFlow(existingSession, flow, from, messageText, contact.id);
+        // Continue the flow from the current step
+        await continueFlow(existingSession, flow, from, messageText, contact.id);
 
-      return NextResponse.json({ status: "session continued" });
+        return NextResponse.json({ status: "session continued" });
+      }
     }
 
     // Find all active flows with matching triggers
@@ -732,10 +743,15 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
           }
         }
 
-        // If no match, take the first connection
-        if (!nextStepId && outgoingConnections.length > 0) {
-          nextStepId = outgoingConnections[0].toStepId;
-          console.log(`[Flow Continue] No match found, taking first connection`);
+        // If no match, DO NOT auto-select - user must reply with valid option
+        if (!nextStepId) {
+          console.log(`[Flow Continue] No match found - user must select a valid option`);
+          // Optionally send error message
+          await sendWhatsAppMessage({
+            to: phoneNumber,
+            message: "Por favor, selecciona una opción válida.",
+          });
+          return; // Stop here, don't continue to invalid path
         }
       }
     } else {
@@ -889,5 +905,52 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
     console.log(`[Flow Continue] ========================================`);
   } catch (error) {
     console.error(`[Flow Continue] Error:`, error);
+  }
+}
+
+/**
+ * Check if a message is a trigger keyword for any active flow
+ */
+async function checkIfTriggerKeyword(messageText: string): Promise<boolean> {
+  try {
+    const activeFlows = await prisma.flow.findMany({
+      where: { isActive: true },
+      include: { steps: true },
+    });
+
+    const messageLower = messageText.toLowerCase().trim();
+
+    for (const flow of activeFlows) {
+      const startNode = flow.steps.find((s) => s.type === "start");
+      if (!startNode) continue;
+
+      const startConfig = JSON.parse(startNode.configJson);
+      const trigger = startConfig.trigger;
+
+      if (!trigger || trigger.type !== "message_received") continue;
+
+      // Check if matches "all"
+      if (trigger.matchMode === "all") {
+        return true;
+      }
+
+      // Check if matches any keyword
+      if (trigger.keywords && trigger.keywords.length > 0) {
+        const matches = trigger.keywords.some((keyword: string) => {
+          const keywordLower = keyword.toLowerCase().trim();
+          if (trigger.matchMode === "exact") {
+            return messageLower === keywordLower;
+          } else {
+            return messageLower.includes(keywordLower);
+          }
+        });
+        if (matches) return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error("[Webhook] Error checking trigger keyword:", error);
+    return false;
   }
 }
