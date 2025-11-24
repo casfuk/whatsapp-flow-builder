@@ -359,8 +359,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ status: "processed" });
   } catch (error) {
-    console.error("Webhook error:", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    console.error("[Webhook] Unhandled error in POST handler:", error);
+    // IMPORTANT: Always return 200 to WhatsApp to acknowledge receipt
+    return NextResponse.json({ status: "error", message: "Internal error handled" }, { status: 200 });
   }
 }
 
@@ -712,28 +713,108 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
       const action = actions[i];
       console.log(`[Flow Continue] Processing action ${i + 1}/${actions.length}: ${action.type}`);
 
-      if (action.type === "send_whatsapp") {
-        console.log(`[Flow Continue]   → Sending message to ${action.to}`);
-        console.log(`[Flow Continue]   → Text: "${action.text}"`);
+      try {
+        if (action.type === "send_whatsapp") {
+          console.log(`[Flow Continue]   → Sending message to ${action.to}`);
+          console.log(`[Flow Continue]   → Text: "${action.text}"`);
 
-        try {
-          const success = await sendWhatsAppMessage({
-            to: action.to,
-            message: action.text,
-          });
-
-          await prisma.messageLog.create({
-            data: {
-              phone: action.to,
+          try {
+            const success = await sendWhatsAppMessage({
+              to: action.to,
               message: action.text,
-              status: success ? "sent" : "failed",
-            },
-          });
+            });
 
-          console.log(`[Flow Continue]   ✓ Message ${success ? 'sent' : 'failed'}`);
-        } catch (err) {
-          console.error(`[Flow Continue]   ✗ Exception:`, err);
+            await prisma.messageLog.create({
+              data: {
+                phone: action.to,
+                message: action.text,
+                status: success ? "sent" : "failed",
+              },
+            });
+
+            console.log(`[Flow Continue]   ✓ Message ${success ? 'sent' : 'failed'}`);
+          } catch (err) {
+            console.error(`[Flow Continue]   ✗ Exception sending text:`, err);
+          }
+        } else if (action.type === "send_whatsapp_interactive") {
+          console.log(`[Flow Continue]   → Sending interactive message to ${action.to}`);
+          console.log(`[Flow Continue]   → Interactive type: ${action.interactive?.type}`);
+
+          try {
+            const success = await sendWhatsAppMessage({
+              to: action.to,
+              type: "interactive",
+              interactive: action.interactive,
+            });
+
+            const messageText = action.interactive?.body?.text || "Interactive message";
+            await prisma.messageLog.create({
+              data: {
+                phone: action.to,
+                message: messageText,
+                status: success ? "sent" : "failed",
+              },
+            });
+
+            console.log(`[Flow Continue]   ✓ Interactive ${success ? 'sent' : 'failed'}`);
+          } catch (err) {
+            console.error(`[Flow Continue]   ✗ Exception sending interactive:`, err);
+            // Fallback: send as plain text
+            try {
+              const fallbackText = action.interactive?.body?.text || "Message";
+              console.log(`[Flow Continue]   → Fallback to text: "${fallbackText}"`);
+              await sendWhatsAppMessage({
+                to: action.to,
+                message: fallbackText,
+              });
+            } catch (fallbackErr) {
+              console.error(`[Flow Continue]   ✗ Fallback also failed:`, fallbackErr);
+            }
+          }
+        } else if (action.type === "send_whatsapp_media") {
+          console.log(`[Flow Continue]   → Sending media message to ${action.to}`);
+          console.log(`[Flow Continue]   → Media type: ${action.mediaType}`);
+
+          try {
+            const success = await sendWhatsAppMessage({
+              to: action.to,
+              type: action.mediaType as any,
+              image: action.image,
+              document: action.document,
+              video: action.video,
+              audio: action.audio,
+            });
+
+            const caption = action.image?.caption || action.document?.caption || action.video?.caption || "Media";
+            await prisma.messageLog.create({
+              data: {
+                phone: action.to,
+                message: `[${action.mediaType}] ${caption}`,
+                status: success ? "sent" : "failed",
+              },
+            });
+
+            console.log(`[Flow Continue]   ✓ Media ${success ? 'sent' : 'failed'}`);
+          } catch (err) {
+            console.error(`[Flow Continue]   ✗ Exception sending media:`, err);
+            // Fallback: send caption as text
+            try {
+              const caption = action.image?.caption || action.document?.caption || action.video?.caption || "Media message";
+              console.log(`[Flow Continue]   → Fallback to text: "${caption}"`);
+              await sendWhatsAppMessage({
+                to: action.to,
+                message: caption,
+              });
+            } catch (fallbackErr) {
+              console.error(`[Flow Continue]   ✗ Fallback also failed:`, fallbackErr);
+            }
+          }
+        } else {
+          console.log(`[Flow Continue]   → Action type: ${action.type} (no handler)`);
         }
+      } catch (actionError) {
+        console.error(`[Flow Continue]   ✗ Action processing error:`, actionError);
+        // Continue with next action even if this one fails
       }
     }
 
