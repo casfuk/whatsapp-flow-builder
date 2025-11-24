@@ -21,6 +21,14 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
 
   console.log(`[WhatsApp Sender] ========================================`);
   console.log(`[WhatsApp Sender] Sending ${type || 'text'} message to: ${to}`);
+  console.log(`[WhatsApp Sender] Params:`, JSON.stringify({
+    to,
+    message: message?.substring(0, 50),
+    type,
+    hasText: !!text,
+    hasInteractive: !!interactive,
+    hasImage: !!image
+  }));
 
   try {
     // Get WhatsApp configuration from database
@@ -79,7 +87,11 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
     } else {
       // Default: text message (backward compatibility)
       requestBody.type = "text";
-      requestBody.text = text || { body: message || "" };
+      if (text && typeof text === "object" && text.body) {
+        requestBody.text = text;
+      } else {
+        requestBody.text = { body: message || "" };
+      }
       console.log(`[WhatsApp Sender] Text: "${requestBody.text.body}"`);
     }
 
