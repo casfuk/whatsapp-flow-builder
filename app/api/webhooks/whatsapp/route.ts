@@ -562,10 +562,34 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
         }
       } else if (action.type === "send_whatsapp_media") {
         console.log(`[Flow Execution]   → send_whatsapp_media action`);
-        const { to, mediaUrl, mediaType, caption } = action.data;
-        console.log(`[Flow Execution]   → To: ${to}`);
-        console.log(`[Flow Execution]   → Media type: ${mediaType}`);
-        console.log(`[Flow Execution]   → Media URL: ${mediaUrl}`);
+        const { to, mediaUrl, mediaType, caption, fileName } = action.data || {};
+
+        // Guard against missing data
+        if (!to || !mediaUrl || !mediaType) {
+          console.error("[send_whatsapp_media] Missing required data", {
+            to,
+            mediaUrl,
+            mediaType,
+          });
+          try {
+            await sendWhatsAppMessage({
+              to: to || "",
+              message: "No he podido enviar el archivo ahora mismo, lo siento.",
+            });
+          } catch (fallbackErr) {
+            console.error("[send_whatsapp_media] Fallback message also failed:", fallbackErr);
+          }
+          continue;
+        }
+
+        // Log BEFORE calling WhatsApp
+        console.log("[send_whatsapp_media] About to send", {
+          to,
+          mediaUrl,
+          mediaType,
+          caption,
+          fileName,
+        });
 
         try {
           const whatsappApiUrl = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
@@ -598,10 +622,11 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
               document: {
                 link: mediaUrl,
                 caption,
+                filename: fileName || "document.pdf",
               },
             };
           } else {
-            console.error("[Flow Execution] Unknown mediaType:", mediaType);
+            console.error("[send_whatsapp_media] Unknown mediaType", mediaType);
             throw new Error(`Unknown mediaType: ${mediaType}`);
           }
 
@@ -609,14 +634,16 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+              Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
             },
             body: JSON.stringify(body),
           });
 
           if (!res.ok) {
             const errorText = await res.text();
-            console.error("[Flow Execution] WhatsApp media error:", res.status, errorText, {
+            console.error("[send_whatsapp_media] WhatsApp error", {
+              status: res.status,
+              body: errorText,
               mediaType,
               mediaUrl,
             });
@@ -911,10 +938,34 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
           }
         } else if (action.type === "send_whatsapp_media") {
           console.log(`[Flow Continue]   → Sending media message`);
-          const { to, mediaUrl, mediaType, caption } = action.data;
-          console.log(`[Flow Continue]   → To: ${to}`);
-          console.log(`[Flow Continue]   → Media type: ${mediaType}`);
-          console.log(`[Flow Continue]   → Media URL: ${mediaUrl}`);
+          const { to, mediaUrl, mediaType, caption, fileName } = action.data || {};
+
+          // Guard against missing data
+          if (!to || !mediaUrl || !mediaType) {
+            console.error("[send_whatsapp_media] Missing required data", {
+              to,
+              mediaUrl,
+              mediaType,
+            });
+            try {
+              await sendWhatsAppMessage({
+                to: to || "",
+                message: "No he podido enviar el archivo ahora mismo, lo siento.",
+              });
+            } catch (fallbackErr) {
+              console.error("[send_whatsapp_media] Fallback message also failed:", fallbackErr);
+            }
+            continue;
+          }
+
+          // Log BEFORE calling WhatsApp
+          console.log("[send_whatsapp_media] About to send", {
+            to,
+            mediaUrl,
+            mediaType,
+            caption,
+            fileName,
+          });
 
           try {
             const whatsappApiUrl = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
@@ -947,10 +998,11 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
                 document: {
                   link: mediaUrl,
                   caption,
+                  filename: fileName || "document.pdf",
                 },
               };
             } else {
-              console.error("[Flow Continue] Unknown mediaType:", mediaType);
+              console.error("[send_whatsapp_media] Unknown mediaType", mediaType);
               throw new Error(`Unknown mediaType: ${mediaType}`);
             }
 
@@ -958,14 +1010,16 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
               },
               body: JSON.stringify(body),
             });
 
             if (!res.ok) {
               const errorText = await res.text();
-              console.error("[Flow Continue] WhatsApp media error:", res.status, errorText, {
+              console.error("[send_whatsapp_media] WhatsApp error", {
+                status: res.status,
+                body: errorText,
                 mediaType,
                 mediaUrl,
               });
