@@ -86,35 +86,30 @@ export class RuntimeEngine {
 
       case "send_message":
         try {
-          // Check for new media structure (type + mediaType + mediaId)
-          const { type, mediaType, mediaId, caption, text } = config;
+          // Check for new media structure (type + mediaType + mediaUrl)
+          const { type, text, caption, mediaUrl, mediaType } = config;
 
-          if (type === "media" || type === "audio" || type === "document") {
-            if (!mediaId) {
-              console.error("[RuntimeEngine send_message] Missing mediaId for media node", step.id);
-              // Fallback to text
-              const fallbackText = this.interpolateVariables(caption || text || "Media message");
-              actions.push({
-                type: "send_whatsapp",
+          if ((type === "media" || type === "audio" || type === "document") && mediaUrl) {
+            console.log(`[RuntimeEngine] Sending ${mediaType || type} with mediaUrl: ${mediaUrl}`);
+            actions.push({
+              type: "send_whatsapp_media",
+              data: {
                 to: this.context.variables.phone,
-                text: fallbackText,
-              });
-            } else {
-              console.log(`[RuntimeEngine] Sending ${mediaType || type} with mediaId: ${mediaId}`);
-              actions.push({
-                type: "send_whatsapp_media",
-                to: this.context.variables.phone,
-                mediaId,
-                mediaType: mediaType || type,
-                caption: this.interpolateVariables(caption || text || ""),
-              });
-            }
+                mediaUrl,
+                mediaType: mediaType ?? type,
+                caption: this.interpolateVariables(caption ?? text ?? ""),
+              },
+            });
 
             return {
               actions,
               nextStepId: this.getNextStepId(step.id),
               shouldStop: false,
             };
+          }
+
+          if (type !== "text" && !mediaUrl) {
+            console.error("[RuntimeEngine send_message] Missing mediaUrl for media node", step.id);
           }
 
           // Check if this is a multimedia message (old structure)

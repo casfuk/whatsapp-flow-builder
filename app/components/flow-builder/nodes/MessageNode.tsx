@@ -23,7 +23,7 @@ type MediaMessageData = BaseMessageData & {
   type: "media";
   fileUrl?: string;
   caption?: string;
-  mediaId?: string;
+  mediaUrl?: string;
   mediaType?: string;
   fileName?: string;
 };
@@ -31,7 +31,7 @@ type MediaMessageData = BaseMessageData & {
 type AudioMessageData = BaseMessageData & {
   type: "audio";
   fileUrl?: string;
-  mediaId?: string;
+  mediaUrl?: string;
   mediaType?: string;
   fileName?: string;
 };
@@ -39,7 +39,7 @@ type AudioMessageData = BaseMessageData & {
 type DocumentMessageData = BaseMessageData & {
   type: "document";
   fileUrl?: string;
-  mediaId?: string;
+  mediaUrl?: string;
   mediaType?: string;
   fileName?: string;
 };
@@ -142,14 +142,14 @@ export function MessageNode({ data, selected, id }: NodeProps<MessageNodeProps>)
         return;
       }
 
-      const json = await res.json();
+      const json = await res.json(); // { url, mimeType, fileName }
 
       updateData({
         type: kind,
         mediaType: kind === "media" ? "image" : kind,
-        mediaId: json.fileId,
+        mediaUrl: json.url,
         fileName: json.fileName,
-      });
+      } as any);
 
       setUploadedFileName(json.fileName);
     } catch (err) {

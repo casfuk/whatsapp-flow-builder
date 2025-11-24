@@ -562,76 +562,93 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
         }
       } else if (action.type === "send_whatsapp_media") {
         console.log(`[Flow Execution]   → send_whatsapp_media action`);
-        console.log(`[Flow Execution]   → To: ${action.to}`);
-        console.log(`[Flow Execution]   → Media type: ${action.mediaType}`);
-
-        const mediaId = action.mediaId || action.image?.id || action.document?.id || action.video?.id || action.audio?.id;
-        const caption = action.caption || action.image?.caption || action.document?.caption || action.video?.caption || "";
-        console.log(`[Flow Execution] Sending media:`, mediaId, action.mediaType);
+        const { to, mediaUrl, mediaType, caption } = action.data;
+        console.log(`[Flow Execution]   → To: ${to}`);
+        console.log(`[Flow Execution]   → Media type: ${mediaType}`);
+        console.log(`[Flow Execution]   → Media URL: ${mediaUrl}`);
 
         try {
-          let success = false;
+          const whatsappApiUrl = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+          let body: any;
 
-          // Handle new structure (mediaId + mediaType)
-          if (action.mediaId) {
-            if (action.mediaType === "image" || action.mediaType === "media") {
-              success = await sendWhatsAppMessage({
-                to: action.to,
-                type: "image",
-                image: { id: mediaId, caption },
-              });
-            } else if (action.mediaType === "audio") {
-              success = await sendWhatsAppMessage({
-                to: action.to,
-                type: "audio",
-                audio: { id: mediaId },
-              });
-            } else if (action.mediaType === "document") {
-              success = await sendWhatsAppMessage({
-                to: action.to,
-                type: "document",
-                document: { id: mediaId, caption },
-              });
-            } else {
-              console.error(`[Flow Execution] Unknown mediaType: ${action.mediaType}`);
-            }
+          if (mediaType === "image" || mediaType === "media") {
+            body = {
+              messaging_product: "whatsapp",
+              to,
+              type: "image",
+              image: {
+                link: mediaUrl,
+                caption,
+              },
+            };
+          } else if (mediaType === "audio") {
+            body = {
+              messaging_product: "whatsapp",
+              to,
+              type: "audio",
+              audio: {
+                link: mediaUrl,
+              },
+            };
+          } else if (mediaType === "document") {
+            body = {
+              messaging_product: "whatsapp",
+              to,
+              type: "document",
+              document: {
+                link: mediaUrl,
+                caption,
+              },
+            };
           } else {
-            // Handle old structure (image/document/video/audio objects)
-            success = await sendWhatsAppMessage({
-              to: action.to,
-              type: action.mediaType as any,
-              image: action.image,
-              document: action.document,
-              video: action.video,
-              audio: action.audio,
-            });
+            console.error("[Flow Execution] Unknown mediaType:", mediaType);
+            throw new Error(`Unknown mediaType: ${mediaType}`);
           }
 
-          if (!success) {
-            console.error(`[Flow Execution]   ✗ Failed to send media message`);
-            // Fallback text
-            await sendWhatsAppMessage({
-              to: action.to,
-              message: "No he podido enviar el archivo ahora mismo, lo siento.",
-            });
-          }
-
-          // Log the outgoing message
-          await prisma.messageLog.create({
-            data: {
-              phone: action.to,
-              message: `[${action.mediaType}] ${caption || "Media"}`,
-              status: success ? "sent" : "failed",
+          const res = await fetch(whatsappApiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
             },
+            body: JSON.stringify(body),
           });
 
-          console.log(`[Flow Execution]   ✓ Media message logged (status: ${success ? 'sent' : 'failed'})`);
+          if (!res.ok) {
+            const errorText = await res.text();
+            console.error("[Flow Execution] WhatsApp media error:", res.status, errorText, {
+              mediaType,
+              mediaUrl,
+            });
+
+            await sendWhatsAppMessage({
+              to,
+              message: "No he podido enviar el archivo ahora mismo, lo siento.",
+            });
+
+            await prisma.messageLog.create({
+              data: {
+                phone: to,
+                message: `[${mediaType}] ${caption || "Media"} - FAILED`,
+                status: "failed",
+              },
+            });
+          } else {
+            console.log(`[Flow Execution]   ✓ Media sent successfully`);
+
+            await prisma.messageLog.create({
+              data: {
+                phone: to,
+                message: `[${mediaType}] ${caption || "Media"}`,
+                status: "sent",
+              },
+            });
+          }
         } catch (err) {
           console.error(`[Flow Execution]   ✗ Exception while sending media message:`, err);
-          // Fallback text
           try {
             await sendWhatsAppMessage({
-              to: action.to,
+              to: action.data.to,
               message: "No he podido enviar el archivo ahora mismo, lo siento.",
             });
           } catch (fallbackErr) {
@@ -893,75 +910,95 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
             }
           }
         } else if (action.type === "send_whatsapp_media") {
-          console.log(`[Flow Continue]   → Sending media message to ${action.to}`);
-          console.log(`[Flow Continue]   → Media type: ${action.mediaType}`);
-
-          const mediaId = action.mediaId || action.image?.id || action.document?.id || action.video?.id || action.audio?.id;
-          const caption = action.caption || action.image?.caption || action.document?.caption || action.video?.caption || "";
-          console.log(`[Flow Continue] Sending media:`, mediaId, action.mediaType);
+          console.log(`[Flow Continue]   → Sending media message`);
+          const { to, mediaUrl, mediaType, caption } = action.data;
+          console.log(`[Flow Continue]   → To: ${to}`);
+          console.log(`[Flow Continue]   → Media type: ${mediaType}`);
+          console.log(`[Flow Continue]   → Media URL: ${mediaUrl}`);
 
           try {
-            let success = false;
+            const whatsappApiUrl = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+            let body: any;
 
-            // Handle new structure (mediaId + mediaType)
-            if (action.mediaId) {
-              if (action.mediaType === "image" || action.mediaType === "media") {
-                success = await sendWhatsAppMessage({
-                  to: action.to,
-                  type: "image",
-                  image: { id: mediaId, caption },
-                });
-              } else if (action.mediaType === "audio") {
-                success = await sendWhatsAppMessage({
-                  to: action.to,
-                  type: "audio",
-                  audio: { id: mediaId },
-                });
-              } else if (action.mediaType === "document") {
-                success = await sendWhatsAppMessage({
-                  to: action.to,
-                  type: "document",
-                  document: { id: mediaId, caption },
-                });
-              } else {
-                console.error(`[Flow Continue] Unknown mediaType: ${action.mediaType}`);
-              }
+            if (mediaType === "image" || mediaType === "media") {
+              body = {
+                messaging_product: "whatsapp",
+                to,
+                type: "image",
+                image: {
+                  link: mediaUrl,
+                  caption,
+                },
+              };
+            } else if (mediaType === "audio") {
+              body = {
+                messaging_product: "whatsapp",
+                to,
+                type: "audio",
+                audio: {
+                  link: mediaUrl,
+                },
+              };
+            } else if (mediaType === "document") {
+              body = {
+                messaging_product: "whatsapp",
+                to,
+                type: "document",
+                document: {
+                  link: mediaUrl,
+                  caption,
+                },
+              };
             } else {
-              // Handle old structure (image/document/video/audio objects)
-              success = await sendWhatsAppMessage({
-                to: action.to,
-                type: action.mediaType as any,
-                image: action.image,
-                document: action.document,
-                video: action.video,
-                audio: action.audio,
-              });
+              console.error("[Flow Continue] Unknown mediaType:", mediaType);
+              throw new Error(`Unknown mediaType: ${mediaType}`);
             }
 
-            if (!success) {
-              console.error(`[Flow Continue]   ✗ Failed to send media`);
-              // Fallback text
-              await sendWhatsAppMessage({
-                to: action.to,
-                message: "No he podido enviar el archivo ahora mismo, lo siento.",
-              });
-            }
-
-            await prisma.messageLog.create({
-              data: {
-                phone: action.to,
-                message: `[${action.mediaType}] ${caption || "Media"}`,
-                status: success ? "sent" : "failed",
+            const res = await fetch(whatsappApiUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
               },
+              body: JSON.stringify(body),
             });
 
-            console.log(`[Flow Continue]   ✓ Media ${success ? 'sent' : 'failed'}`);
+            if (!res.ok) {
+              const errorText = await res.text();
+              console.error("[Flow Continue] WhatsApp media error:", res.status, errorText, {
+                mediaType,
+                mediaUrl,
+              });
+
+              await sendWhatsAppMessage({
+                to,
+                message: "No he podido enviar el archivo ahora mismo, lo siento.",
+              });
+
+              await prisma.messageLog.create({
+                data: {
+                  phone: to,
+                  message: `[${mediaType}] ${caption || "Media"} - FAILED`,
+                  status: "failed",
+                },
+              });
+            } else {
+              console.log(`[Flow Continue]   ✓ Media sent successfully`);
+
+              await prisma.messageLog.create({
+                data: {
+                  phone: to,
+                  message: `[${mediaType}] ${caption || "Media"}`,
+                  status: "sent",
+                },
+              });
+            }
           } catch (err) {
             console.error(`[Flow Continue]   ✗ Exception sending media:`, err);
             // Fallback: send error message
             try {
               await sendWhatsAppMessage({
-                to: action.to,
+                to: action.data.to,
                 message: "No he podido enviar el archivo ahora mismo, lo siento.",
               });
             } catch (fallbackErr) {
