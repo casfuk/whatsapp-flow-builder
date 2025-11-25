@@ -454,29 +454,32 @@ function AudioForm({
       // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Try formats in order of preference: OGG/Opus (WhatsApp) → WebM/Opus → WebM (fallback)
-      const preferredTypes = [
-        "audio/ogg;codecs=opus",   // WhatsApp official support
-        "audio/webm;codecs=opus",  // Good quality, widely supported
-        "audio/webm",              // Universal fallback
-      ];
+      // Check if browser supports MP3 recording
+      const mp3MimeType = "audio/mpeg";
 
-      let selectedType = "";
-
-      if (typeof MediaRecorder !== "undefined") {
-        for (const t of preferredTypes) {
-          if (MediaRecorder.isTypeSupported(t)) {
-            selectedType = t;
-            console.log(`[Audio Recording] Selected format: ${selectedType}`);
-            break;
-          }
-        }
+      if (typeof MediaRecorder === "undefined") {
+        console.error(`[Audio Recording] MediaRecorder API not available`);
+        setRecordingError(
+          "❌ Tu navegador no soporta grabación de audio. Prueba con Chrome, Edge o Firefox, o sube un archivo de audio."
+        );
+        stream.getTracks().forEach(track => track.stop());
+        return;
       }
 
-      // Create MediaRecorder with best supported format
-      const mediaRecorder = selectedType !== ""
-        ? new MediaRecorder(stream, { mimeType: selectedType })
-        : new MediaRecorder(stream);
+      if (!MediaRecorder.isTypeSupported(mp3MimeType)) {
+        console.warn(`[Audio Recording] ⚠️ Browser does not support MP3 recording (audio/mpeg)`);
+        console.warn(`[Audio Recording] Please upload an MP3 file instead`);
+        setRecordingError(
+          "⚠️ Tu navegador no soporta grabación en formato MP3. Por favor, sube un archivo de audio en formato MP3."
+        );
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      console.log(`[Audio Recording] ✅ Browser supports MP3 recording (audio/mpeg)`);
+
+      // Create MediaRecorder with MP3 format
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: mp3MimeType });
 
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -490,35 +493,27 @@ function AudioForm({
 
       // Handle recording stop
       mediaRecorder.onstop = async () => {
-        // Determine actual format used
-        const finalType = mediaRecorder.mimeType || selectedType || "audio/webm";
-        const extension = finalType.includes("ogg") ? "ogg" : "webm";
-
         console.log(`[Audio Recording] ========================================`);
         console.log(`[Audio Recording] 🎤 Recording stopped`);
-        console.log(`[Audio Recording] Final MIME type: ${finalType}`);
-        console.log(`[Audio Recording] File extension: ${extension}`);
+        console.log(`[Audio Recording] MIME type: audio/mpeg`);
+        console.log(`[Audio Recording] File extension: mp3`);
         console.log(`[Audio Recording] Blob size: ${audioChunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0)} bytes`);
+        console.log(`[Audio Recording] ✅ Using WhatsApp-compatible MP3 format!`);
 
-        if (finalType.includes('ogg') && finalType.includes('opus')) {
-          console.log(`[Audio Recording] ✅ Using WhatsApp-compatible format!`);
-        } else if (finalType.includes('webm')) {
-          console.log(`[Audio Recording] ⚠️ Using WebM format (WhatsApp support may vary)`);
-        }
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: finalType });
+        // Create MP3 blob
+        const mp3Blob = new Blob(audioChunksRef.current, { type: "audio/mpeg" });
 
         // Generate unique filename with timestamp to avoid conflicts
         const timestamp = Date.now();
-        const uniqueFileName = `recording-${timestamp}.${extension}`;
+        const uniqueFileName = `recording-${timestamp}.mp3`;
 
         console.log(`[Audio Recording] Creating file: ${uniqueFileName}`);
         console.log(`[Audio Recording] ========================================`);
 
         // Convert blob to File and upload using centralized handler
-        const audioFile = new File([audioBlob], uniqueFileName, { type: finalType });
-        await handleFileUpload(audioFile, "audio");
-        setUploadedFileName(`grabación-${timestamp}.${extension}`);
+        const mp3File = new File([mp3Blob], uniqueFileName, { type: "audio/mpeg" });
+        await handleFileUpload(mp3File, "audio");
+        setUploadedFileName(`grabación-${timestamp}.mp3`);
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());

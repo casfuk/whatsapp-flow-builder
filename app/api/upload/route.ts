@@ -16,34 +16,53 @@ export async function POST(req: NextRequest) {
     }
 
     const mimeType = file.type || "application/octet-stream";
-    const fileName = file.name || "uploaded-file";
+    const originalFileName = file.name || "uploaded-file";
+
+    // Generate unique filename: timestamp-uuid-originalname
+    const timestamp = Date.now();
+    const uuid = crypto.randomUUID();
+    const uniqueFileName = `${timestamp}-${uuid}-${originalFileName}`;
 
     console.log(`[/api/upload] ========================================`);
     console.log(`[/api/upload] 📤 UPLOADING FILE TO VERCEL BLOB`);
-    console.log(`[/api/upload] File name: ${fileName}`);
+    console.log(`[/api/upload] Original file name: ${originalFileName}`);
+    console.log(`[/api/upload] Unique file name: ${uniqueFileName}`);
     console.log(`[/api/upload] File type: ${mimeType}`);
     console.log(`[/api/upload] File size: ${file.size} bytes`);
 
     // Extra validation for audio files
-    if (fileName.endsWith('.ogg') || fileName.endsWith('.webm') || mimeType.startsWith('audio/')) {
+    if (originalFileName.endsWith('.mp3') || originalFileName.endsWith('.ogg') || originalFileName.endsWith('.m4a') || originalFileName.endsWith('.aac') || originalFileName.endsWith('.amr') || mimeType.startsWith('audio/')) {
       console.log(`[/api/upload] 🎵 AUDIO FILE DETECTED`);
-      console.log(`[/api/upload] Extension: ${fileName.split('.').pop()}`);
+      console.log(`[/api/upload] Extension: ${originalFileName.split('.').pop()}`);
       console.log(`[/api/upload] MIME Type: ${mimeType}`);
 
-      if (mimeType.includes('ogg') && mimeType.includes('opus')) {
-        console.log(`[/api/upload] ✅ WhatsApp-compatible format: ${mimeType}`);
-      } else if (mimeType.includes('webm')) {
-        console.log(`[/api/upload] ⚠️ WebM format - WhatsApp support may vary: ${mimeType}`);
+      // WhatsApp-supported audio formats
+      const whatsappSupportedAudio = [
+        'audio/ogg',
+        'audio/mpeg',  // MP3
+        'audio/mp4',   // M4A
+        'audio/aac',
+        'audio/amr'
+      ];
+
+      const isWhatsAppCompatible = whatsappSupportedAudio.some(type => mimeType.includes(type));
+
+      if (mimeType.includes('mpeg') || originalFileName.endsWith('.mp3')) {
+        console.log(`[/api/upload] ✅ MP3 audio detected - WhatsApp-compatible format!`);
+      } else if (mimeType.includes('ogg') && mimeType.includes('opus')) {
+        console.log(`[/api/upload] ✅ OGG/Opus audio - WhatsApp-compatible format!`);
+      } else if (isWhatsAppCompatible) {
+        console.log(`[/api/upload] ✅ WhatsApp-compatible audio: ${mimeType}`);
       } else {
-        console.log(`[/api/upload] ℹ️ Audio format: ${mimeType}`);
+        console.log(`[/api/upload] ⚠️ Audio format may not be supported by WhatsApp: ${mimeType}`);
       }
     }
 
-    // Upload to Vercel Blob Storage with random suffix to avoid conflicts
-    const blob = await put(fileName, file, {
+    // Upload to Vercel Blob Storage with unique filename
+    const blob = await put(uniqueFileName, file, {
       access: "public",
       contentType: mimeType,
-      addRandomSuffix: true, // Always generate unique filenames
+      addRandomSuffix: false, // We already have unique filename
     });
 
     console.log(`[/api/upload] ✅ Upload successful!`);
@@ -53,7 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         url: blob.url,
-        fileName: fileName,
+        fileName: originalFileName, // Return original name for display
         mimeType: mimeType,
       },
       { status: 200 }
