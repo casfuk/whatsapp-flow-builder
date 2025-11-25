@@ -71,10 +71,12 @@ export async function POST(request: NextRequest) {
       normalizedText = message.text.body;
     } else if (messageType === "interactive" && message.interactive) {
       if (message.interactive.type === "button_reply" && message.interactive.button_reply) {
-        normalizedText = message.interactive.button_reply.id || message.interactive.button_reply.title;
+        // Prioritize title (what user sees) over ID (internal identifier)
+        normalizedText = message.interactive.button_reply.title || message.interactive.button_reply.id;
         console.log(`[Webhook] Button clicked - ID: ${message.interactive.button_reply.id}, Title: ${message.interactive.button_reply.title}`);
       } else if (message.interactive.type === "list_reply" && message.interactive.list_reply) {
-        normalizedText = message.interactive.list_reply.id || message.interactive.list_reply.title;
+        // Prioritize title (what user sees) over ID (internal identifier)
+        normalizedText = message.interactive.list_reply.title || message.interactive.list_reply.id;
         console.log(`[Webhook] List item selected - ID: ${message.interactive.list_reply.id}, Title: ${message.interactive.list_reply.title}`);
       }
     }

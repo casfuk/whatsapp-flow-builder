@@ -6,6 +6,7 @@ import { Chat, Device, ChatFilters } from "@/app/types/chat";
 import { ChatFiltersPopover } from "@/app/components/chat/ChatFiltersPopover";
 import { NewChatModal } from "@/app/components/chat/NewChatModal";
 import { ChatThreadEnhanced } from "@/app/components/chat/ChatThreadEnhanced";
+import { ChatActionsMenu } from "@/app/components/chat/ChatActionsMenu";
 
 type Tab = "all" | "mine" | "favorites";
 
@@ -125,6 +126,18 @@ export default function ChatsPage() {
     setChats(prev => [chat, ...prev]);
     setSelectedChatId(chat.id);
     setShowNewChatModal(false);
+  };
+
+  const handleChatDeleted = (chatId: string) => {
+    setChats(prev => prev.filter(c => c.id !== chatId));
+    if (selectedChatId === chatId) {
+      setSelectedChatId(null);
+    }
+  };
+
+  const handleChatCleared = (chatId: string) => {
+    // Refresh the chat list to show updated message count
+    fetchChats();
   };
 
   const formatTime = (dateString: string) => {
@@ -306,18 +319,12 @@ export default function ChatsPage() {
                       </div>
                     </div>
 
-                    {/* More Actions Icon */}
-                    <button
-                      className="flex-shrink-0 text-gray-400 hover:text-gray-600"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // TODO: Show more actions menu
-                      }}
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                      </svg>
-                    </button>
+                    {/* More Actions Menu */}
+                    <ChatActionsMenu
+                      chatId={chat.id}
+                      onDelete={() => handleChatDeleted(chat.id)}
+                      onClear={() => handleChatCleared(chat.id)}
+                    />
                   </button>
                 ))}
               </div>
