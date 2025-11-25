@@ -100,6 +100,13 @@ export async function POST(
         text: { body: text },
       };
 
+      // Make a safe string for logging; avoid null
+      const tokenForLog = device.accessToken ?? "";
+
+      if (!tokenForLog) {
+        console.warn("[/api/chats/[id]/messages] ⚠️ WARNING: Device has no accessToken!");
+      }
+
       console.log("[/api/chats/[id]/messages] ========================================");
       console.log("[/api/chats/[id]/messages] 🚀 SENDING MESSAGE TO WHATSAPP CLOUD API");
       console.log("[/api/chats/[id]/messages] URL:", whatsappApiUrl);
@@ -107,7 +114,9 @@ export async function POST(
       console.log("[/api/chats/[id]/messages] Device ID:", device.id);
       console.log("[/api/chats/[id]/messages] Method: POST");
       console.log("[/api/chats/[id]/messages] Headers:", {
-        Authorization: `Bearer ${device.accessToken.substring(0, 10)}...${device.accessToken.substring(device.accessToken.length - 4)}`,
+        Authorization: tokenForLog
+          ? `Bearer ${tokenForLog.substring(0, 10)}...${tokenForLog.substring(tokenForLog.length - 4)}`
+          : "Bearer [NO TOKEN]",
         "Content-Type": "application/json",
       });
       console.log("[/api/chats/[id]/messages] Body:", JSON.stringify(requestBody, null, 2));
