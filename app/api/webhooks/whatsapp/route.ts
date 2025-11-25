@@ -186,6 +186,26 @@ export async function POST(request: NextRequest) {
 
         console.log(`[Webhook] Chat upserted: ${chat.id}`);
 
+        // Build metadata for the message
+        const messageMetadata: any = {
+          messageType: messageType,
+          timestamp: new Date().toISOString(),
+        };
+
+        // Store additional context for interactive messages
+        if (messageType === "interactive" && message.interactive) {
+          if (message.interactive.type === "button_reply" && message.interactive.button_reply) {
+            messageMetadata.interactiveType = "button_reply";
+            messageMetadata.buttonId = message.interactive.button_reply.id;
+            messageMetadata.buttonTitle = message.interactive.button_reply.title;
+          } else if (message.interactive.type === "list_reply" && message.interactive.list_reply) {
+            messageMetadata.interactiveType = "list_reply";
+            messageMetadata.listItemId = message.interactive.list_reply.id;
+            messageMetadata.listItemTitle = message.interactive.list_reply.title;
+            messageMetadata.listItemDescription = message.interactive.list_reply.description;
+          }
+        }
+
         // Save the message
         await prisma.message.create({
           data: {
@@ -194,10 +214,11 @@ export async function POST(request: NextRequest) {
             text: messageText,
             status: "delivered",
             messageId: messageId,
+            metadata: JSON.stringify(messageMetadata),
           },
         });
 
-        console.log(`[Webhook] Message saved to database`);
+        console.log(`[Webhook] Message saved to database with metadata:`, messageMetadata);
       } catch (chatError) {
         console.error(`[Webhook] Error saving to Chat system:`, chatError);
       }
