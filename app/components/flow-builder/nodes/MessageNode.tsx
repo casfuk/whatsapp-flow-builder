@@ -454,9 +454,9 @@ function AudioForm({
       // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Create MediaRecorder
+      // Create MediaRecorder with WhatsApp-compatible format
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm',
+        mimeType: 'audio/ogg;codecs=opus',
       });
 
       mediaRecorderRef.current = mediaRecorder;
@@ -471,12 +471,12 @@ function AudioForm({
 
       // Handle recording stop
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg;codecs=opus' });
 
         // Convert blob to File and upload using centralized handler
-        const audioFile = new File([audioBlob], "recording.webm", { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], "recording.ogg", { type: 'audio/ogg;codecs=opus' });
         await handleFileUpload(audioFile, "audio");
-        setUploadedFileName("grabación.webm");
+        setUploadedFileName("grabación.ogg");
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
