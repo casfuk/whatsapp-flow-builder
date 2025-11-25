@@ -10,6 +10,7 @@ interface Message {
   text: string;
   status: string;
   createdAt: string;
+  metadata?: string; // JSON string with interactive message details
 }
 
 interface Contact {
@@ -438,7 +439,24 @@ export function ChatThreadEnhanced({
                           }`}
                         >
                           <p className="text-sm whitespace-pre-wrap break-words">
-                            {message.text}
+                            {(() => {
+                              // For interactive messages, show the button title (what user sees)
+                              // instead of the button ID (what engine uses)
+                              if (message.metadata) {
+                                try {
+                                  const metadata = JSON.parse(message.metadata);
+                                  if (metadata.buttonTitle) {
+                                    return metadata.buttonTitle; // e.g., "document"
+                                  }
+                                  if (metadata.listItemTitle) {
+                                    return metadata.listItemTitle;
+                                  }
+                                } catch (e) {
+                                  // If metadata parsing fails, fall back to text
+                                }
+                              }
+                              return message.text; // For text messages or fallback
+                            })()}
                           </p>
                           <div
                             className={`text-xs mt-1 flex items-center gap-1 ${

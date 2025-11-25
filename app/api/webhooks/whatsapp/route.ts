@@ -71,12 +71,13 @@ export async function POST(request: NextRequest) {
       normalizedText = message.text.body;
     } else if (messageType === "interactive" && message.interactive) {
       if (message.interactive.type === "button_reply" && message.interactive.button_reply) {
-        // Prioritize title (what user sees) over ID (internal identifier)
-        normalizedText = message.interactive.button_reply.title || message.interactive.button_reply.id;
+        // Use ID for routing logic (flow engine needs this to match connections)
+        // Title is stored in metadata for display purposes only
+        normalizedText = message.interactive.button_reply.id;
         console.log(`[Webhook] Button clicked - ID: ${message.interactive.button_reply.id}, Title: ${message.interactive.button_reply.title}`);
       } else if (message.interactive.type === "list_reply" && message.interactive.list_reply) {
-        // Prioritize title (what user sees) over ID (internal identifier)
-        normalizedText = message.interactive.list_reply.title || message.interactive.list_reply.id;
+        // Use ID for routing logic
+        normalizedText = message.interactive.list_reply.id;
         console.log(`[Webhook] List item selected - ID: ${message.interactive.list_reply.id}, Title: ${message.interactive.list_reply.title}`);
       }
     }
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "unsupported type" });
     }
 
-    const messageText = normalizedText;
+    const messageText = normalizedText; // ID for engine, title in metadata for UI
 
     console.log(`[Webhook] ========================================`);
     console.log(`[Webhook] Received ${messageType} message from ${from}`);
