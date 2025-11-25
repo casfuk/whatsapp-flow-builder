@@ -498,10 +498,14 @@ function AudioForm({
 
         const audioBlob = new Blob(audioChunksRef.current, { type: finalType });
 
+        // Generate unique filename with timestamp to avoid conflicts
+        const timestamp = Date.now();
+        const uniqueFileName = `recording-${timestamp}.${extension}`;
+
         // Convert blob to File and upload using centralized handler
-        const audioFile = new File([audioBlob], `recording.${extension}`, { type: finalType });
+        const audioFile = new File([audioBlob], uniqueFileName, { type: finalType });
         await handleFileUpload(audioFile, "audio");
-        setUploadedFileName(`grabación.${extension}`);
+        setUploadedFileName(`grabación-${timestamp}.${extension}`);
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -525,16 +529,30 @@ function AudioForm({
 
     } catch (error: any) {
       console.error('[Audio Recording] Error:', error);
+      console.error('[Audio Recording] Error name:', error?.name);
+      console.error('[Audio Recording] Error message:', error?.message);
 
       // Provide specific error messages based on error type
-      if (error?.name === "NotAllowedError" || error?.name === "NotFoundError") {
-        setRecordingError("No se pudo acceder al micrófono. Por favor, permite el acceso.");
+      if (error?.name === "NotAllowedError") {
+        setRecordingError(
+          "🎤 Acceso al micrófono denegado. Por favor, haz clic en el icono del candado en la barra de direcciones y permite el acceso al micrófono."
+        );
+      } else if (error?.name === "NotFoundError") {
+        setRecordingError(
+          "🎤 No se encontró ningún micrófono. Por favor, conecta un micrófono y vuelve a intentarlo."
+        );
       } else if (error?.name === "NotSupportedError") {
         setRecordingError(
-          "Tu navegador no soporta esta grabación de audio. Prueba con otro navegador (Chrome/Edge) o sube un archivo de audio."
+          "❌ Tu navegador no soporta grabación de audio. Prueba con Chrome, Edge o Firefox, o sube un archivo de audio."
+        );
+      } else if (error?.name === "NotReadableError") {
+        setRecordingError(
+          "🎤 El micrófono está siendo usado por otra aplicación. Cierra otras apps y vuelve a intentarlo."
         );
       } else {
-        setRecordingError("Error al iniciar la grabación. Inténtalo de nuevo.");
+        setRecordingError(
+          `Error al iniciar la grabación: ${error?.message || "Error desconocido"}. Inténtalo de nuevo o sube un archivo.`
+        );
       }
 
       setIsRecording(false);

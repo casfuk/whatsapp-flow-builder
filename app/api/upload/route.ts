@@ -24,10 +24,11 @@ export async function POST(req: NextRequest) {
     console.log(`[/api/upload] File type: ${mimeType}`);
     console.log(`[/api/upload] File size: ${file.size} bytes`);
 
-    // Upload to Vercel Blob Storage
+    // Upload to Vercel Blob Storage with random suffix to avoid conflicts
     const blob = await put(fileName, file, {
       access: "public",
       contentType: mimeType,
+      addRandomSuffix: true, // Always generate unique filenames
     });
 
     console.log(`[/api/upload] ✅ Upload successful!`);
