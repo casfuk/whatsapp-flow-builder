@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { put } from "@vercel/blob";
 
 export const runtime = "nodejs";
 
@@ -14,39 +15,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // TEMPORARY: ignore the actual file and just return a public URL
-    // so the rest of the flow (MessageNode + send_whatsapp_media) works.
     const mimeType = file.type || "application/octet-stream";
+    const fileName = file.name || "uploaded-file";
 
-    // Choose a different demo URL depending on type
-    let demoUrl = "https://via.placeholder.com/512"; // default image
-    if (mimeType.startsWith("audio/")) {
-      demoUrl =
-        "https://www2.cs.uic.edu/~i101/SoundFiles/BabyElephantWalk60.wav";
-    } else if (
-      mimeType === "application/pdf" ||
-      mimeType.includes("officedocument") ||
-      mimeType.includes("msword")
-    ) {
-      demoUrl =
-        "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf";
-    }
+    console.log(`[/api/upload] ========================================`);
+    console.log(`[/api/upload] 📤 UPLOADING FILE TO VERCEL BLOB`);
+    console.log(`[/api/upload] File name: ${fileName}`);
+    console.log(`[/api/upload] File type: ${mimeType}`);
+    console.log(`[/api/upload] File size: ${file.size} bytes`);
 
-    console.log(`[/api/upload] File received: ${file.name} (${mimeType})`);
-    console.log(`[/api/upload] Returning demo URL: ${demoUrl}`);
+    // Upload to Vercel Blob Storage
+    const blob = await put(fileName, file, {
+      access: "public",
+      contentType: mimeType,
+    });
+
+    console.log(`[/api/upload] ✅ Upload successful!`);
+    console.log(`[/api/upload] Public URL: ${blob.url}`);
+    console.log(`[/api/upload] ========================================`);
 
     return NextResponse.json(
       {
-        url: demoUrl,
-        fileName: file.name || "demo-file",
-        mimeType,
+        url: blob.url,
+        fileName: fileName,
+        mimeType: mimeType,
       },
       { status: 200 }
     );
-  } catch (err) {
-    console.error("[/api/upload] Uncaught error:", err);
+  } catch (err: any) {
+    console.error("[/api/upload] ❌ Upload error:", err);
+    console.error("[/api/upload] Error message:", err.message);
+    console.error("[/api/upload] Error stack:", err.stack);
     return NextResponse.json(
-      { error: "Upload failed" },
+      { error: "Upload failed", details: err.message },
       { status: 500 }
     );
   }
