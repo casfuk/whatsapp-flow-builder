@@ -226,6 +226,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if this is a reply to an existing session (button click)
+    console.log(`[Webhook] Checking for existing session for phone: ${from}`);
     const existingSession = await prisma.sessionState.findFirst({
       where: {
         sessionId: {
@@ -238,10 +239,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    console.log(`[Webhook] Session query result: ${existingSession ? `Found (ID: ${existingSession.sessionId}, currentStepId: ${existingSession.currentStepId})` : 'Not found'}`);
+
     if (existingSession && existingSession.currentStepId) {
-      console.log(`[Webhook] Found existing session: ${existingSession.sessionId}`);
-      console.log(`[Webhook] Current step: ${existingSession.currentStepId}`);
-      console.log(`[Webhook] User replied with: "${messageText}"`);
+      console.log(`[Webhook] ✓ Found existing session: ${existingSession.sessionId}`);
+      console.log(`[Webhook] ✓ Current step: ${existingSession.currentStepId}`);
+      console.log(`[Webhook] ✓ User replied with: "${messageText}"`);
 
       // Check if message is a trigger keyword - if so, treat as new flow start, not reply
       const isTriggerKeyword = await checkIfTriggerKeyword(messageText);
