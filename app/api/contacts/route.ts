@@ -96,10 +96,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert contact (create or update)
+    // Manual contacts have deviceId = "" (empty string for non-WhatsApp contacts)
     const contact = await prisma.contact.upsert({
-      where: { phone },
+      where: {
+        phone_device: {
+          phone,
+          deviceId: "",
+        },
+      },
       create: {
         phone,
+        deviceId: "",
         name: name || null,
         email: email || null,
         profileImageUrl: profileImageUrl || null,

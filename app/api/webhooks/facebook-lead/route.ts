@@ -126,14 +126,15 @@ async function createContactFromLead(leadData: any) {
   }
 
   // Create or update contact
-  let contact = await prisma.contact.findUnique({
-    where: { phone },
+  // Form contacts have deviceId = "" (empty string for non-WhatsApp contacts)
+  let contact = await prisma.contact.findFirst({
+    where: { phone, deviceId: "" },
   });
 
   if (contact) {
     // Update existing
     contact = await prisma.contact.update({
-      where: { phone },
+      where: { id: contact.id },
       data: {
         name: name || contact.name,
         email: email || contact.email,
@@ -144,6 +145,7 @@ async function createContactFromLead(leadData: any) {
     contact = await prisma.contact.create({
       data: {
         phone,
+        deviceId: "",
         name,
         email,
         source: "form",

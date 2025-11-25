@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-sender";
+import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 
 // GET: Webhook verification (required by Meta)
 export async function GET(request: NextRequest) {
@@ -24,6 +25,22 @@ export async function GET(request: NextRequest) {
 // POST: Handle incoming messages
 export async function POST(request: NextRequest) {
   console.log("[Webhook] *** NEW REQUEST TO /api/webhooks/whatsapp ***");
+
+  // Check required environment variables
+  if (!process.env.WHATSAPP_CLOUD_API_TOKEN) {
+    console.error("[Webhook] CRITICAL: WHATSAPP_CLOUD_API_TOKEN is not set!");
+    return NextResponse.json(
+      { error: "WhatsApp API token not configured" },
+      { status: 500 }
+    );
+  }
+  if (!process.env.WHATSAPP_PHONE_NUMBER_ID) {
+    console.error("[Webhook] CRITICAL: WHATSAPP_PHONE_NUMBER_ID is not set!");
+    return NextResponse.json(
+      { error: "WhatsApp phone number ID not configured" },
+      { status: 500 }
+    );
+  }
 
   try {
     const body = await request.json();
@@ -78,11 +95,39 @@ export async function POST(request: NextRequest) {
     // Extract profile picture URL if available
     const profilePicUrl = value.contacts?.[0]?.profile?.picture;
 
-    // Save or update contact
+    // Get device ID from the webhook payload (WhatsApp Phone Number ID) - BEFORE contact
+    const devicePhoneNumberId = value.metadata?.phone_number_id;
+
+    // Find device by whatsappPhoneNumberId
+    let device = null;
+    if (devicePhoneNumberId) {
+      device = await prisma.device.findFirst({
+        where: { whatsappPhoneNumberId: devicePhoneNumberId },
+      });
+    }
+
+    // If no device found, use the first connected device as fallback
+    if (!device) {
+      device = await prisma.device.findFirst({
+        where: { isConnected: true },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    const deviceId = device?.id || null;
+    console.log(`[Webhook] Device for this webhook: ${deviceId || 'none'}`);
+
+    // Save or update contact (using composite unique key: phone + deviceId)
     const contact = await prisma.contact.upsert({
-      where: { phone: from },
+      where: {
+        phone_device: {
+          phone: from,
+          deviceId: deviceId || "",
+        },
+      },
       create: {
         phone: from,
+        deviceId: deviceId,
         name: contactName,
         profileImageUrl: profilePicUrl || null,
         source: "whatsapp",
@@ -102,26 +147,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[Webhook] Contact for this event: ${contact.id}, phone: ${contact.phone}, name: ${contact.name || 'unnamed'}`);
+    console.log(`[Webhook] Contact for this event: ${contact.id}, phone: ${contact.phone}, deviceId: ${contact.deviceId}, name: ${contact.name || 'unnamed'}`);
 
-    // Get device ID from the webhook payload (WhatsApp Phone Number ID)
-    const devicePhoneNumberId = value.metadata?.phone_number_id;
-
-    // Find device by whatsappPhoneNumberId
-    let device = null;
-    if (devicePhoneNumberId) {
-      device = await prisma.device.findFirst({
-        where: { whatsappPhoneNumberId: devicePhoneNumberId },
-      });
-    }
-
-    // If no device found, use the first connected device as fallback
-    if (!device) {
-      device = await prisma.device.findFirst({
-        where: { isConnected: true },
-        orderBy: { createdAt: 'asc' },
-      });
-    }
 
     // Save message to Chat system if device exists
     if (device) {
@@ -269,7 +296,7 @@ export async function POST(request: NextRequest) {
       }
 
         // Continue the flow from the current step
-        await continueFlow(existingSession, flow, from, messageText, contact.id);
+        await continueFlow(existingSession, flow, from, messageText, contact.id, deviceId);
 
         return NextResponse.json({ status: "session continued" });
       }
@@ -404,11 +431,11 @@ export async function POST(request: NextRequest) {
 
       if (shouldTrigger) {
         console.log(`[Webhook] ✓✓✓ TRIGGERING FLOW: "${flow.name}" (ID: ${flow.id}) for contact: ${from}`);
-        console.log(`[Webhook] ➜ Calling executeFlow with flowId=${flow.id}, phone=${from}, contactId=${contact.id}`);
+        console.log(`[Webhook] ➜ Calling executeFlow with flowId=${flow.id}, phone=${from}, contactId=${contact.id}, deviceId=${deviceId}`);
         triggeredCount++;
 
         // Execute the flow
-        await executeFlow(flow.id, from, messageText, contact.id);
+        await executeFlow(flow.id, from, messageText, contact.id, deviceId);
 
         console.log(`[Webhook] ✓ Flow executed for flow ${flow.id}`);
       } else {
@@ -431,7 +458,7 @@ export async function POST(request: NextRequest) {
 /**
  * Execute a flow for a contact
  */
-async function executeFlow(flowId: string, phoneNumber: string, initialMessage: string, contactId: string) {
+async function executeFlow(flowId: string, phoneNumber: string, initialMessage: string, contactId: string, deviceId: string | null) {
   try {
     // Generate session ID
     const sessionId = `${phoneNumber}-${flowId}-${Date.now()}`;
@@ -440,6 +467,7 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
     console.log(`[Flow Execution] STARTING FLOW EXECUTION`);
     console.log(`[Flow Execution] Flow ID: ${flowId}`);
     console.log(`[Flow Execution] Contact: ${phoneNumber} (contactId: ${contactId})`);
+    console.log(`[Flow Execution] Device ID: ${deviceId || 'none'}`);
     console.log(`[Flow Execution] Session ID: ${sessionId}`);
     console.log(`[Flow Execution] Initial message: "${initialMessage}"`);
 
@@ -508,25 +536,30 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
         console.log(`[Flow Execution]   → Text: "${action.text}"`);
 
         try {
-          const success = await sendWhatsAppMessage({
-            to: action.to,
-            message: action.text,
-          });
-
-          if (!success) {
-            console.error(`[Flow Execution]   ✗ Failed to send message (sendWhatsAppMessage returned false)`);
+          if (!deviceId) {
+            console.error(`[Flow Execution]   ✗ No deviceId available, cannot persist message`);
+            throw new Error("No deviceId available");
           }
 
-          // Log the outgoing message
+          await sendAndPersistMessage({
+            deviceId,
+            toPhoneNumber: action.to,
+            type: "text",
+            payload: { text: { body: action.text } },
+            sender: "flow",
+            textPreview: action.text,
+          });
+
+          // Also log to messageLog for backwards compatibility
           await prisma.messageLog.create({
             data: {
               phone: action.to,
               message: action.text,
-              status: success ? "sent" : "failed",
+              status: "sent",
             },
           });
 
-          console.log(`[Flow Execution]   ✓ Message logged to messageLog (status: ${success ? 'sent' : 'failed'})`);
+          console.log(`[Flow Execution]   ✓ Message sent and persisted`);
         } catch (err) {
           console.error(`[Flow Execution]   ✗ Exception while sending WhatsApp message:`, err);
         }
@@ -536,151 +569,104 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
         console.log(`[Flow Execution]   → Interactive type: ${action.interactive?.type}`);
 
         try {
-          const success = await sendWhatsAppMessage({
-            to: action.to,
-            type: "interactive",
-            interactive: action.interactive,
-          });
-
-          if (!success) {
-            console.error(`[Flow Execution]   ✗ Failed to send interactive message`);
+          if (!deviceId) {
+            console.error(`[Flow Execution]   ✗ No deviceId available, cannot persist message`);
+            throw new Error("No deviceId available");
           }
 
-          // Log the outgoing message
           const messageText = action.interactive?.body?.text || "Interactive message";
+
+          await sendAndPersistMessage({
+            deviceId,
+            toPhoneNumber: action.to,
+            type: "interactive",
+            payload: { interactive: action.interactive },
+            sender: "flow",
+            textPreview: messageText,
+          });
+
+          // Also log to messageLog for backwards compatibility
           await prisma.messageLog.create({
             data: {
               phone: action.to,
               message: messageText,
-              status: success ? "sent" : "failed",
+              status: "sent",
             },
           });
 
-          console.log(`[Flow Execution]   ✓ Interactive message logged (status: ${success ? 'sent' : 'failed'})`);
+          console.log(`[Flow Execution]   ✓ Interactive message sent and persisted`);
         } catch (err) {
           console.error(`[Flow Execution]   ✗ Exception while sending interactive message:`, err);
         }
       } else if (action.type === "send_whatsapp_media") {
         console.log(`[Flow Execution]   → send_whatsapp_media action`);
-        const { to, mediaUrl, mediaType, caption, fileName } = action.data || {};
+        const { to, mediaId, mediaUrl, mediaType, caption, fileName } = action.data || {};
 
         // Guard against missing data
-        if (!to || !mediaUrl || !mediaType) {
+        const hasMediaId = mediaId && mediaId !== "";
+        const hasMediaUrl = mediaUrl && mediaUrl !== "";
+
+        if (!to || !mediaType || (!hasMediaId && !hasMediaUrl) || !deviceId) {
           console.error("[send_whatsapp_media] Missing required data", {
             to,
+            mediaId,
             mediaUrl,
             mediaType,
+            deviceId,
           });
-          try {
-            await sendWhatsAppMessage({
-              to: to || "",
-              message: "No he podido enviar el archivo ahora mismo, lo siento.",
-            });
-          } catch (fallbackErr) {
-            console.error("[send_whatsapp_media] Fallback message also failed:", fallbackErr);
-          }
           continue;
         }
 
-        // Log BEFORE calling WhatsApp
-        console.log("[send_whatsapp_media] About to send", {
-          to,
-          mediaUrl,
-          mediaType,
-          caption,
-          fileName,
-        });
-
         try {
-          const whatsappApiUrl = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-          let body: any;
+          // Build payload based on media type
+          let payload: any = {};
+          const actualType = mediaType === "media" ? "image" : mediaType;
 
-          if (mediaType === "image" || mediaType === "media") {
-            body = {
-              messaging_product: "whatsapp",
-              to,
-              type: "image",
-              image: {
-                link: mediaUrl,
-                caption,
-              },
-            };
-          } else if (mediaType === "audio") {
-            body = {
-              messaging_product: "whatsapp",
-              to,
-              type: "audio",
-              audio: {
-                link: mediaUrl,
-              },
-            };
-          } else if (mediaType === "document") {
-            body = {
-              messaging_product: "whatsapp",
-              to,
-              type: "document",
-              document: {
-                link: mediaUrl,
-                caption,
-                filename: fileName || "document.pdf",
-              },
-            };
-          } else {
-            console.error("[send_whatsapp_media] Unknown mediaType", mediaType);
-            throw new Error(`Unknown mediaType: ${mediaType}`);
+          if (actualType === "image") {
+            const imagePayload: any = {};
+            if (hasMediaId) imagePayload.id = mediaId;
+            else if (hasMediaUrl) imagePayload.link = mediaUrl;
+            if (caption) imagePayload.caption = caption;
+            payload.image = imagePayload;
+          } else if (actualType === "audio") {
+            const audioPayload: any = {};
+            if (hasMediaId) audioPayload.id = mediaId;
+            else if (hasMediaUrl) audioPayload.link = mediaUrl;
+            payload.audio = audioPayload;
+          } else if (actualType === "document") {
+            const documentPayload: any = {};
+            if (hasMediaId) documentPayload.id = mediaId;
+            else if (hasMediaUrl) documentPayload.link = mediaUrl;
+            if (caption) documentPayload.caption = caption;
+            if (fileName) documentPayload.filename = fileName;
+            payload.document = documentPayload;
           }
 
-          const res = await fetch(whatsappApiUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.WHATSAPP_CLOUD_API_TOKEN}`,
-            },
-            body: JSON.stringify(body),
+          await sendAndPersistMessage({
+            deviceId,
+            toPhoneNumber: to,
+            type: actualType as any,
+            payload,
+            sender: "flow",
+            textPreview: caption || `[${actualType}]`,
           });
 
-          if (!res.ok) {
-            const errorText = await res.text();
-            console.error("[send_whatsapp_media] WhatsApp error", {
-              status: res.status,
-              body: errorText,
-              mediaType,
-              mediaUrl,
-            });
+          // Also log to messageLog for backwards compatibility
+          await prisma.messageLog.create({
+            data: {
+              phone: to,
+              message: `[${mediaType}] ${caption || "Media"}`,
+              status: "sent",
+            },
+          });
 
-            await sendWhatsAppMessage({
-              to,
-              message: "No he podido enviar el archivo ahora mismo, lo siento.",
-            });
-
-            await prisma.messageLog.create({
-              data: {
-                phone: to,
-                message: `[${mediaType}] ${caption || "Media"} - FAILED`,
-                status: "failed",
-              },
-            });
-          } else {
-            console.log(`[Flow Execution]   ✓ Media sent successfully`);
-
-            await prisma.messageLog.create({
-              data: {
-                phone: to,
-                message: `[${mediaType}] ${caption || "Media"}`,
-                status: "sent",
-              },
-            });
-          }
-        } catch (err) {
-          console.error(`[Flow Execution]   ✗ Exception while sending media message:`, err);
-          try {
-            await sendWhatsAppMessage({
-              to: action.data.to,
-              message: "No he podido enviar el archivo ahora mismo, lo siento.",
-            });
-          } catch (fallbackErr) {
-            console.error(`[Flow Execution]   ✗ Fallback also failed:`, fallbackErr);
-          }
+          console.log(`[Flow Execution]   ✓ Media sent and persisted`);
+        } catch (err: any) {
+          console.error("[WA] Exception sending media message", {
+            payload: { to, mediaId, mediaUrl, mediaType },
+            message: err.message,
+            error: err,
+          });
         }
       } else if (action.type === "assign_conversation") {
         console.log(`[Flow Execution]   → Assigning conversation to: ${action.assigneeId || 'NULL'}`);
@@ -752,12 +738,13 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
 /**
  * Continue an existing flow session with user's reply
  */
-async function continueFlow(session: any, flow: any, phoneNumber: string, userReply: string, contactId: string) {
+async function continueFlow(session: any, flow: any, phoneNumber: string, userReply: string, contactId: string, deviceId: string | null) {
   try {
     console.log(`[Flow Continue] ========================================`);
     console.log(`[Flow Continue] CONTINUING FLOW SESSION`);
     console.log(`[Flow Continue] Session ID: ${session.sessionId}`);
     console.log(`[Flow Continue] Current step: ${session.currentStepId}`);
+    console.log(`[Flow Continue] Device ID: ${deviceId || 'none'}`);
     console.log(`[Flow Continue] User reply: "${userReply}"`);
     const currentStep = flow.steps.find((s: any) => s.id === session.currentStepId);
 
@@ -884,20 +871,29 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
           console.log(`[Flow Continue]   → Text: "${action.text}"`);
 
           try {
-            const success = await sendWhatsAppMessage({
-              to: action.to,
-              message: action.text,
+            if (!deviceId) {
+              console.error(`[Flow Continue]   ✗ No deviceId available, cannot persist message`);
+              throw new Error("No deviceId available");
+            }
+
+            await sendAndPersistMessage({
+              deviceId,
+              toPhoneNumber: action.to,
+              type: "text",
+              payload: { text: { body: action.text } },
+              sender: "flow",
+              textPreview: action.text,
             });
 
             await prisma.messageLog.create({
               data: {
                 phone: action.to,
                 message: action.text,
-                status: success ? "sent" : "failed",
+                status: "sent",
               },
             });
 
-            console.log(`[Flow Continue]   ✓ Message ${success ? 'sent' : 'failed'}`);
+            console.log(`[Flow Continue]   ✓ Message sent and persisted`);
           } catch (err) {
             console.error(`[Flow Continue]   ✗ Exception sending text:`, err);
           }
@@ -906,158 +902,103 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
           console.log(`[Flow Continue]   → Interactive type: ${action.interactive?.type}`);
 
           try {
-            const success = await sendWhatsAppMessage({
-              to: action.to,
-              type: "interactive",
-              interactive: action.interactive,
-            });
+            if (!deviceId) {
+              console.error(`[Flow Continue]   ✗ No deviceId available, cannot persist message`);
+              throw new Error("No deviceId available");
+            }
 
             const messageText = action.interactive?.body?.text || "Interactive message";
+
+            await sendAndPersistMessage({
+              deviceId,
+              toPhoneNumber: action.to,
+              type: "interactive",
+              payload: { interactive: action.interactive },
+              sender: "flow",
+              textPreview: messageText,
+            });
+
             await prisma.messageLog.create({
               data: {
                 phone: action.to,
                 message: messageText,
-                status: success ? "sent" : "failed",
+                status: "sent",
               },
             });
 
-            console.log(`[Flow Continue]   ✓ Interactive ${success ? 'sent' : 'failed'}`);
+            console.log(`[Flow Continue]   ✓ Interactive sent and persisted`);
           } catch (err) {
             console.error(`[Flow Continue]   ✗ Exception sending interactive:`, err);
-            // Fallback: send as plain text
-            try {
-              const fallbackText = action.interactive?.body?.text || "Message";
-              console.log(`[Flow Continue]   → Fallback to text: "${fallbackText}"`);
-              await sendWhatsAppMessage({
-                to: action.to,
-                message: fallbackText,
-              });
-            } catch (fallbackErr) {
-              console.error(`[Flow Continue]   ✗ Fallback also failed:`, fallbackErr);
-            }
           }
         } else if (action.type === "send_whatsapp_media") {
           console.log(`[Flow Continue]   → Sending media message`);
-          const { to, mediaUrl, mediaType, caption, fileName } = action.data || {};
+          const { to, mediaId, mediaUrl, mediaType, caption, fileName } = action.data || {};
 
           // Guard against missing data
-          if (!to || !mediaUrl || !mediaType) {
+          const hasMediaId = mediaId && mediaId !== "";
+          const hasMediaUrl = mediaUrl && mediaUrl !== "";
+
+          if (!to || !mediaType || (!hasMediaId && !hasMediaUrl) || !deviceId) {
             console.error("[send_whatsapp_media] Missing required data", {
               to,
+              mediaId,
               mediaUrl,
               mediaType,
+              deviceId,
             });
-            try {
-              await sendWhatsAppMessage({
-                to: to || "",
-                message: "No he podido enviar el archivo ahora mismo, lo siento.",
-              });
-            } catch (fallbackErr) {
-              console.error("[send_whatsapp_media] Fallback message also failed:", fallbackErr);
-            }
             continue;
           }
 
-          // Log BEFORE calling WhatsApp
-          console.log("[send_whatsapp_media] About to send", {
-            to,
-            mediaUrl,
-            mediaType,
-            caption,
-            fileName,
-          });
-
           try {
-            const whatsappApiUrl = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-            let body: any;
+            // Build payload based on media type
+            let payload: any = {};
+            const actualType = mediaType === "media" ? "image" : mediaType;
 
-            if (mediaType === "image" || mediaType === "media") {
-              body = {
-                messaging_product: "whatsapp",
-                to,
-                type: "image",
-                image: {
-                  link: mediaUrl,
-                  caption,
-                },
-              };
-            } else if (mediaType === "audio") {
-              body = {
-                messaging_product: "whatsapp",
-                to,
-                type: "audio",
-                audio: {
-                  link: mediaUrl,
-                },
-              };
-            } else if (mediaType === "document") {
-              body = {
-                messaging_product: "whatsapp",
-                to,
-                type: "document",
-                document: {
-                  link: mediaUrl,
-                  caption,
-                  filename: fileName || "document.pdf",
-                },
-              };
-            } else {
-              console.error("[send_whatsapp_media] Unknown mediaType", mediaType);
-              throw new Error(`Unknown mediaType: ${mediaType}`);
+            if (actualType === "image") {
+              const imagePayload: any = {};
+              if (hasMediaId) imagePayload.id = mediaId;
+              else if (hasMediaUrl) imagePayload.link = mediaUrl;
+              if (caption) imagePayload.caption = caption;
+              payload.image = imagePayload;
+            } else if (actualType === "audio") {
+              const audioPayload: any = {};
+              if (hasMediaId) audioPayload.id = mediaId;
+              else if (hasMediaUrl) audioPayload.link = mediaUrl;
+              payload.audio = audioPayload;
+            } else if (actualType === "document") {
+              const documentPayload: any = {};
+              if (hasMediaId) documentPayload.id = mediaId;
+              else if (hasMediaUrl) documentPayload.link = mediaUrl;
+              if (caption) documentPayload.caption = caption;
+              if (fileName) documentPayload.filename = fileName;
+              payload.document = documentPayload;
             }
 
-            const res = await fetch(whatsappApiUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${process.env.WHATSAPP_CLOUD_API_TOKEN}`,
-              },
-              body: JSON.stringify(body),
+            await sendAndPersistMessage({
+              deviceId,
+              toPhoneNumber: to,
+              type: actualType as any,
+              payload,
+              sender: "flow",
+              textPreview: caption || `[${actualType}]`,
             });
 
-            if (!res.ok) {
-              const errorText = await res.text();
-              console.error("[send_whatsapp_media] WhatsApp error", {
-                status: res.status,
-                body: errorText,
-                mediaType,
-                mediaUrl,
-              });
+            // Also log to messageLog for backwards compatibility
+            await prisma.messageLog.create({
+              data: {
+                phone: to,
+                message: `[${mediaType}] ${caption || "Media"}`,
+                status: "sent",
+              },
+            });
 
-              await sendWhatsAppMessage({
-                to,
-                message: "No he podido enviar el archivo ahora mismo, lo siento.",
-              });
-
-              await prisma.messageLog.create({
-                data: {
-                  phone: to,
-                  message: `[${mediaType}] ${caption || "Media"} - FAILED`,
-                  status: "failed",
-                },
-              });
-            } else {
-              console.log(`[Flow Continue]   ✓ Media sent successfully`);
-
-              await prisma.messageLog.create({
-                data: {
-                  phone: to,
-                  message: `[${mediaType}] ${caption || "Media"}`,
-                  status: "sent",
-                },
-              });
-            }
-          } catch (err) {
-            console.error(`[Flow Continue]   ✗ Exception sending media:`, err);
-            // Fallback: send error message
-            try {
-              await sendWhatsAppMessage({
-                to: action.data.to,
-                message: "No he podido enviar el archivo ahora mismo, lo siento.",
-              });
-            } catch (fallbackErr) {
-              console.error(`[Flow Continue]   ✗ Fallback also failed:`, fallbackErr);
-            }
+            console.log(`[Flow Continue]   ✓ Media sent and persisted`);
+          } catch (err: any) {
+            console.error("[WA] Exception sending media message", {
+              payload: { to, mediaId, mediaUrl, mediaType },
+              message: err.message,
+              error: err,
+            });
           }
         } else {
           console.log(`[Flow Continue]   → Action type: ${action.type} (no handler)`);

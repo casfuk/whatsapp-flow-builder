@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,49 +8,46 @@ datasource db {
 }
 
 model Flow {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   name        String
-  key         String   @unique
+  key         String           @unique
   description String?
-  isActive    Boolean  @default(false)
+  isActive    Boolean          @default(false)
   startStepId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  steps       FlowStep[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
   connections FlowConnection[]
+  steps       FlowStep[]
   answers     FormAnswer[]
 
   @@index([key])
 }
 
 model FlowStep {
-  id        String @id @default(cuid())
-  flowId    String
-  type      String
-  label     String
-  configJson String @default("{}")
-  positionX Int    @default(0)
-  positionY Int    @default(0)
-
-  flow            Flow             @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  id              String           @id @default(cuid())
+  flowId          String
+  type            String
+  label           String
+  configJson      String           @default("{}")
+  positionX       Int              @default(0)
+  positionY       Int              @default(0)
   connectionsFrom FlowConnection[] @relation("FromStep")
   connectionsTo   FlowConnection[] @relation("ToStep")
+  flow            Flow             @relation(fields: [flowId], references: [id], onDelete: Cascade)
 
   @@index([flowId])
 }
 
 model FlowConnection {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   flowId         String
   fromStepId     String
   toStepId       String
   conditionLabel String?
-  sourceHandle   String? // For multiple choice nodes: the option ID that leads to this connection
-
-  flow     Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
-  fromStep FlowStep @relation("FromStep", fields: [fromStepId], references: [id], onDelete: Cascade)
-  toStep   FlowStep @relation("ToStep", fields: [toStepId], references: [id], onDelete: Cascade)
+  sourceHandle   String?
+  flow           Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  fromStep       FlowStep @relation("FromStep", fields: [fromStepId], references: [id], onDelete: Cascade)
+  toStep         FlowStep @relation("ToStep", fields: [toStepId], references: [id], onDelete: Cascade)
 
   @@index([flowId])
   @@index([fromStepId])
@@ -66,25 +60,24 @@ model FormAnswer {
   sessionId   String
   answersJson String   @default("{}")
   createdAt   DateTime @default(now())
-
-  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  flow        Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
 
   @@index([flowId])
   @@index([sessionId])
 }
 
 model SessionState {
-  id              String   @id @default(cuid())
-  sessionId       String   @unique
-  flowId          String
-  currentStepId   String?
-  variablesJson   String   @default("{}")
-  status          String   @default("active") // active, completed, stopped
-  assigneeId      String?  // Agent/user assigned to this conversation
-  assigneeType    String?  // human, ai
-  aiTurnCount     Int      @default(0) // Track turns for AI agent conversations
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  sessionId     String   @unique
+  flowId        String
+  currentStepId String?
+  variablesJson String   @default("{}")
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  assigneeId    String?
+  aiTurnCount   Int      @default(0)
+  assigneeType  String?
 
   @@index([sessionId])
   @@index([flowId])
@@ -93,26 +86,26 @@ model SessionState {
 }
 
 model DebugAction {
-  id          String   @id @default(cuid())
-  sessionId   String
-  actionType  String
-  actionData  String
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  sessionId  String
+  actionType String
+  actionData String
+  createdAt  DateTime @default(now())
 
   @@index([sessionId])
 }
 
 model Device {
-  id                     String   @id @default(cuid())
-  name                   String
-  color                  String   @default("#6D5BFA")
-  whatsappPhoneNumberId  String?
-  phoneNumber            String?
-  isConnected            Boolean  @default(false)
-  accessToken            String?
-  businessAccountId      String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  name                  String
+  color                 String   @default("#6D5BFA")
+  whatsappPhoneNumberId String?
+  phoneNumber           String?
+  isConnected           Boolean  @default(false)
+  accessToken           String?
+  businessAccountId     String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@index([isConnected])
 }
@@ -123,8 +116,7 @@ model Tag {
   color     String       @default("#6D5BFA")
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
-
-  contacts ContactTag[]
+  contacts  ContactTag[]
 
   @@index([name])
 }
@@ -132,9 +124,8 @@ model Tag {
 model ContactTag {
   contactId String
   tagId     String
-
-  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([contactId, tagId])
   @@index([contactId])
@@ -142,57 +133,59 @@ model ContactTag {
 }
 
 model Contact {
-  id              String   @id @default(cuid())
+  id              String                    @id @default(cuid())
+  phone           String                    @map("phoneNumber")
   name            String?
-  phone           String   @unique @map("phoneNumber")
   email           String?
-  profileImageUrl String?  @map("profilePic")
-  notes           String?  @db.Text
+  profileImageUrl String?                   @map("profilePic")
+  source          String                    @default("manual")
+  metadata        String                    @default("{}")
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
   assignedAdminId String?
-  source          String   @default("manual") // whatsapp, form, manual
-  metadata        String   @default("{}")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  notes           String?
+  deviceId        String?
+  customValues    ContactCustomFieldValue[]
+  tags            ContactTag[]
 
-  tags         ContactTag[]
-  customValues ContactCustomFieldValue[]
-
+  @@unique([phone, deviceId], name: "phone_device")
   @@index([phone])
+  @@index([deviceId])
   @@index([source])
   @@index([assignedAdminId])
 }
 
 model Lead {
-  id          String   @id @default(cuid())
-  name        String?
-  phone       String   @unique
-  email       String?
-  metadata    String   @default("{}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String?
+  phone     String   @unique
+  email     String?
+  metadata  String   @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([phone])
 }
 
 model MessageLog {
-  id          String   @id @default(cuid())
-  phone       String
-  message     String
-  status      String   @default("pending") // pending, sent, failed
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  phone     String
+  message   String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
 
   @@index([phone])
   @@index([createdAt])
 }
 
 model FacebookAccount {
-  id              String   @id @default(cuid())
-  userId          String?
-  facebookUserId  String   @unique
-  accessToken     String
-  expiresAt       DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  userId         String?
+  facebookUserId String    @unique
+  accessToken    String
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([userId])
 }
@@ -220,13 +213,13 @@ model Settings {
 model WhatsAppConfig {
   id            String   @id @default(cuid())
   workspaceId   String?
-  mode          String   // "cloud_api" | "qr_session"
+  mode          String
   phoneNumber   String?
-  phoneNumberId String?  // For cloud_api
-  wabaId        String?  // For cloud_api
-  accessToken   String?  // For cloud_api
-  sessionId     String?  // For qr_session
-  sessionState  String?  // For qr_session
+  phoneNumberId String?
+  wabaId        String?
+  accessToken   String?
+  sessionId     String?
+  sessionState  String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -235,28 +228,26 @@ model WhatsAppConfig {
 }
 
 model CustomField {
-  id        String   @id @default(cuid())
+  id        String                    @id @default(cuid())
   name      String
-  key       String   @unique // Slugified version of name for programmatic access
-  type      String   @default("text") // text, number, date, url
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  values ContactCustomFieldValue[]
+  key       String                    @unique
+  type      String                    @default("text")
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+  values    ContactCustomFieldValue[]
 
   @@index([key])
 }
 
 model ContactCustomFieldValue {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   contactId     String
   customFieldId String
   value         String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  contact       Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  customField   CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
 
   @@unique([contactId, customFieldId])
   @@index([contactId])
@@ -264,45 +255,45 @@ model ContactCustomFieldValue {
 }
 
 model Whalink {
-  id              String   @id @default(cuid())
-  name            String
-  slug            String   @unique
-  fullUrl         String
-  deviceId        String
-  presetMessage   String
-  image           String?
-  description     String?
-  emailKey        String?
-  nameKey         String?
-  trackingPixel   String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  fullUrl       String
+  deviceId      String
+  presetMessage String
+  image         String?
+  description   String?
+  emailKey      String?
+  nameKey       String?
+  trackingPixel String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([slug])
   @@index([deviceId])
 }
 
 model MassSend {
-  id             String   @id @default(cuid())
-  name           String   // Title of the broadcast
-  deviceId       String   // WhatsApp device ID
-  body           String   // Message text with merge tags
-  mediaType      String   @default("NONE") // IMAGE, VIDEO, NONE
-  mediaUrl       String?
-  includeTags    String   @default("[]") // JSON array of tag IDs to include
-  excludeTags    String   @default("[]") // JSON array of tag IDs to exclude
-  contactsFrom   DateTime?
-  contactsTo     DateTime?
-  sendOption     String   @default("SCHEDULED") // NOW, SCHEDULED
-  scheduledAt    DateTime?
-  speed          String   @default("SLOW") // SLOW, MEDIUM, FAST
-  timezone       String   @default("Europe/Madrid")
-  status         String   @default("DRAFT") // DRAFT, SCHEDULED, SENDING, COMPLETED, CANCELLED
-  totalContacts  Int      @default(0)
-  sentCount      Int      @default(0)
-  failedCount    Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String    @id @default(cuid())
+  name          String
+  deviceId      String
+  body          String
+  mediaType     String    @default("NONE")
+  mediaUrl      String?
+  includeTags   String    @default("[]")
+  excludeTags   String    @default("[]")
+  contactsFrom  DateTime?
+  contactsTo    DateTime?
+  sendOption    String    @default("SCHEDULED")
+  scheduledAt   DateTime?
+  speed         String    @default("SLOW")
+  timezone      String    @default("Europe/Madrid")
+  status        String    @default("DRAFT")
+  totalContacts Int       @default(0)
+  sentCount     Int       @default(0)
+  failedCount   Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([deviceId])
   @@index([status])
@@ -313,12 +304,12 @@ model AiAgent {
   id           String   @id @default(cuid())
   name         String
   description  String?
-  language     String   @default("es") // Language for responses
-  tone         String   @default("professional") // professional, friendly, casual, formal
-  goal         String?  // What this agent is trying to achieve
-  systemPrompt String   @db.Text // Full system prompt for the AI
-  maxTurns     Int      @default(10) // Max conversation turns before handover
-  createdById  String?  // User who created this agent
+  language     String   @default("es")
+  tone         String   @default("professional")
+  goal         String?
+  systemPrompt String
+  maxTurns     Int      @default(10)
+  createdById  String?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -328,13 +319,13 @@ model AiAgent {
 }
 
 model ConversationMessage {
-  id             String   @id @default(cuid())
-  sessionId      String
-  senderType     String   // USER, AI_AGENT, HUMAN_AGENT
-  senderId       String?  // AiAgent ID or Human Agent ID
-  message        String   @db.Text
-  metadata       String   @default("{}") // JSON for extra data
-  createdAt      DateTime @default(now())
+  id         String   @id @default(cuid())
+  sessionId  String
+  senderType String
+  senderId   String?
+  message    String
+  metadata   String   @default("{}")
+  createdAt  DateTime @default(now())
 
   @@index([sessionId])
   @@index([senderType])
@@ -342,41 +333,40 @@ model ConversationMessage {
 }
 
 model Chat {
-  id                   String    @id @default(cuid())
-  phoneNumber          String
-  contactName          String?
-  lastMessagePreview   String?   @db.Text
-  lastMessageAt        DateTime  @default(now())
-  unreadCount          Int       @default(0)
-  status               String    @default("open") // open, closed
-  tags                 String    @default("[]") // JSON array of tag IDs
-  deviceId             String
-  isFavorite           Boolean   @default(false)
-  assignedToUserId     String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  phoneNumber        String
+  contactName        String?
+  lastMessagePreview String?
+  lastMessageAt      DateTime  @default(now())
+  unreadCount        Int       @default(0)
+  status             String    @default("open")
+  tags               String    @default("[]")
+  deviceId           String
+  isFavorite         Boolean   @default(false)
+  assignedToUserId   String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  messages           Message[]
 
-  messages             Message[]
-
+  @@unique([phoneNumber, deviceId])
   @@index([phoneNumber])
   @@index([deviceId])
   @@index([status])
   @@index([assignedToUserId])
   @@index([lastMessageAt])
   @@index([isFavorite])
-  @@unique([phoneNumber, deviceId])
 }
 
 model Message {
-  id          String   @id @default(cuid())
-  chatId      String
-  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sender      String   // "agent" or "contact"
-  text        String   @db.Text
-  status      String   @default("sent") // sent, delivered, read, failed
-  messageId   String?  // WhatsApp message ID for tracking
-  metadata    String   @default("{}") // JSON for media URLs, etc.
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  chatId    String
+  sender    String
+  text      String
+  status    String   @default("sent")
+  messageId String?
+  metadata  String   @default("{}")
+  createdAt DateTime @default(now())
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@index([chatId])
   @@index([createdAt])

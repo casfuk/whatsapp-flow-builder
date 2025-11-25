@@ -86,18 +86,42 @@ export class RuntimeEngine {
 
       case "send_message":
         try {
-          // Check for new media structure (type + mediaType + mediaUrl)
-          const { type, text, caption, mediaUrl, mediaType } = config;
+          // Check for new media structure (type + mediaType + mediaUrl/mediaId)
+          const { type, text, caption, mediaUrl, mediaId, mediaType, fileName } = config;
 
-          if ((type === "media" || type === "audio" || type === "document") && mediaUrl) {
-            console.log(`[RuntimeEngine] Sending ${mediaType || type} with mediaUrl: ${mediaUrl}`);
+          // IMPORTANT: Never use fileUrl - it's a browser blob URL
+          if (type === "media" || type === "audio" || type === "document") {
+            // Prefer mediaId, fallback to mediaUrl
+            const hasMediaId = mediaId && mediaId !== "";
+            const hasMediaUrl = mediaUrl && mediaUrl !== "" && !mediaUrl.startsWith("blob:");
+
+            if (!hasMediaId && !hasMediaUrl) {
+              console.error("[RuntimeEngine send_message] Missing both mediaId and mediaUrl for media node", step.id);
+              // Fallback to text message
+              const fallbackText = this.interpolateVariables(caption || text || "Media message");
+              actions.push({
+                type: "send_whatsapp",
+                to: this.context.variables.phone,
+                text: fallbackText,
+              });
+              return {
+                actions,
+                nextStepId: this.getNextStepId(step.id),
+                shouldStop: false,
+              };
+            }
+
+            console.log(`[RuntimeEngine] Sending ${mediaType || type} - mediaId: ${mediaId || 'none'}, mediaUrl: ${hasMediaUrl ? mediaUrl : 'none'}`);
+
             actions.push({
               type: "send_whatsapp_media",
               data: {
                 to: this.context.variables.phone,
-                mediaUrl,
+                mediaId: hasMediaId ? mediaId : undefined,
+                mediaUrl: hasMediaUrl ? mediaUrl : undefined,
                 mediaType: mediaType ?? type,
                 caption: this.interpolateVariables(caption ?? text ?? ""),
+                fileName: fileName || undefined,
               },
             });
 
@@ -106,10 +130,6 @@ export class RuntimeEngine {
               nextStepId: this.getNextStepId(step.id),
               shouldStop: false,
             };
-          }
-
-          if (type !== "text" && !mediaUrl) {
-            console.error("[RuntimeEngine send_message] Missing mediaUrl for media node", step.id);
           }
 
           // Check if this is a multimedia message (old structure)
@@ -600,15 +620,17 @@ export class RuntimeEngine {
       }
 
       // Find or create contact by phone number
-      let contact = await prisma.contact.findUnique({
+      // For runtime engine context, we don't have deviceId, so we'll find any matching phone
+      let contact = await prisma.contact.findFirst({
         where: { phone: phoneNumber },
       });
 
       if (!contact) {
-        // Create contact if it doesn't exist
+        // Create contact if it doesn't exist (with empty deviceId for non-device contacts)
         contact = await prisma.contact.create({
           data: {
             phone: phoneNumber,
+            deviceId: "",
             source: "whatsapp",
           },
         });

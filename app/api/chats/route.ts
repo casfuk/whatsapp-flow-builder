@@ -142,8 +142,8 @@ export async function POST(request: NextRequest) {
     // If chat doesn't exist, create it
     if (!chat) {
       // Try to get contact name from Contact model
-      const contact = await prisma.contact.findUnique({
-        where: { phone: phoneNumber },
+      const contact = await prisma.contact.findFirst({
+        where: { phone: phoneNumber, deviceId },
       });
 
       chat = await prisma.chat.create({

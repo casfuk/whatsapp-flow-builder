@@ -17,8 +17,17 @@ export interface SendWhatsAppInteractiveAction extends Action {
 
 export interface SendWhatsAppMediaAction extends Action {
   type: "send_whatsapp_media";
-  to: string;
-  mediaType: "image" | "document" | "video" | "audio";
+  data: {
+    to: string;
+    mediaType: "image" | "document" | "video" | "audio" | "media";
+    mediaId?: string;
+    mediaUrl?: string;
+    caption?: string;
+    fileName?: string;
+  };
+  // Legacy structure (deprecated)
+  to?: string;
+  mediaType?: "image" | "document" | "video" | "audio";
   image?: any;
   document?: any;
   video?: any;
