@@ -123,10 +123,26 @@ export function validateFlow(nodes: Node[], edges: Edge[]): ValidationResult {
         case "media":
         case "audio":
         case "document":
-          if (!data.fileUrl) {
+          // Check for mediaUrl (new) or fileUrl (legacy) - but prefer mediaUrl
+          if (!data.mediaUrl && !data.fileUrl) {
             errors.push({
               type: "error",
               message: `Mensaje ${data.type}: debe cargar un archivo`,
+              nodeId: node.id,
+            });
+          }
+          // Warn if using blob URL (won't work with WhatsApp Cloud API)
+          if (data.mediaUrl && data.mediaUrl.startsWith("blob:")) {
+            errors.push({
+              type: "error",
+              message: `Mensaje ${data.type}: URL de archivo no válida (blob: URL). Debe subir el archivo al servidor.`,
+              nodeId: node.id,
+            });
+          }
+          if (data.fileUrl && data.fileUrl.startsWith("blob:") && !data.mediaUrl) {
+            errors.push({
+              type: "error",
+              message: `Mensaje ${data.type}: URL de archivo no válida (blob: URL). Debe subir el archivo al servidor.`,
               nodeId: node.id,
             });
           }

@@ -92,33 +92,54 @@ export async function POST(
 
     try {
       // Call WhatsApp API to send message
-      // This is a placeholder - adjust to your WhatsApp integration
-      const whatsappResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${device.whatsappPhoneNumberId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${device.accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: chat.phoneNumber,
-            type: "text",
-            text: { body: text },
-          }),
-        }
-      );
+      const whatsappApiUrl = `https://graph.facebook.com/v18.0/${device.whatsappPhoneNumberId}/messages`;
+      const requestBody = {
+        messaging_product: "whatsapp",
+        to: chat.phoneNumber,
+        type: "text",
+        text: { body: text },
+      };
+
+      console.log("[/api/chats/[id]/messages] ========================================");
+      console.log("[/api/chats/[id]/messages] 🚀 SENDING MESSAGE TO WHATSAPP CLOUD API");
+      console.log("[/api/chats/[id]/messages] URL:", whatsappApiUrl);
+      console.log("[/api/chats/[id]/messages] Chat ID:", chatId);
+      console.log("[/api/chats/[id]/messages] Device ID:", device.id);
+      console.log("[/api/chats/[id]/messages] Method: POST");
+      console.log("[/api/chats/[id]/messages] Headers:", {
+        Authorization: `Bearer ${device.accessToken.substring(0, 10)}...${device.accessToken.substring(device.accessToken.length - 4)}`,
+        "Content-Type": "application/json",
+      });
+      console.log("[/api/chats/[id]/messages] Body:", JSON.stringify(requestBody, null, 2));
+      console.log("[/api/chats/[id]/messages] ========================================");
+
+      const whatsappResponse = await fetch(whatsappApiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${device.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log("[/api/chats/[id]/messages] ========================================");
+      console.log("[/api/chats/[id]/messages] 📥 WHATSAPP CLOUD API RESPONSE");
+      console.log("[/api/chats/[id]/messages] Status:", whatsappResponse.status, whatsappResponse.statusText);
+      console.log("[/api/chats/[id]/messages] Headers:", Object.fromEntries(whatsappResponse.headers.entries()));
 
       if (whatsappResponse.ok) {
         const data = await whatsappResponse.json();
+        console.log("[/api/chats/[id]/messages] ✅ Response body:", JSON.stringify(data, null, 2));
         whatsappMessageId = data.messages?.[0]?.id || null;
+        console.log("[/api/chats/[id]/messages] Message ID:", whatsappMessageId);
       } else {
-        console.error("WhatsApp API error:", await whatsappResponse.text());
+        const errorText = await whatsappResponse.text();
+        console.error("[/api/chats/[id]/messages] ❌ WhatsApp API error:", errorText);
         messageStatus = "failed";
       }
+      console.log("[/api/chats/[id]/messages] ========================================");
     } catch (whatsappError) {
-      console.error("Failed to send WhatsApp message:", whatsappError);
+      console.error("[/api/chats/[id]/messages] ❌ EXCEPTION - Failed to send WhatsApp message:", whatsappError);
       messageStatus = "failed";
     }
 

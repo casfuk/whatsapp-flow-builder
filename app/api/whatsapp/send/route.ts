@@ -41,6 +41,28 @@ export async function POST(request: NextRequest) {
 
     // Send message via WhatsApp Cloud API
     const whatsappApiUrl = `https://graph.facebook.com/v17.0/${device.whatsappPhoneNumberId}/messages`;
+    const requestBody = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: to,
+      type: "text",
+      text: {
+        preview_url: false,
+        body: message,
+      },
+    };
+
+    console.log("[/api/whatsapp/send] ========================================");
+    console.log("[/api/whatsapp/send] 🚀 SENDING MESSAGE TO WHATSAPP CLOUD API");
+    console.log("[/api/whatsapp/send] URL:", whatsappApiUrl);
+    console.log("[/api/whatsapp/send] Device ID:", device.id);
+    console.log("[/api/whatsapp/send] Method: POST");
+    console.log("[/api/whatsapp/send] Headers:", {
+      Authorization: `Bearer ${device.accessToken.substring(0, 10)}...${device.accessToken.substring(device.accessToken.length - 4)}`,
+      "Content-Type": "application/json",
+    });
+    console.log("[/api/whatsapp/send] Body:", JSON.stringify(requestBody, null, 2));
+    console.log("[/api/whatsapp/send] ========================================");
 
     const response = await fetch(whatsappApiUrl, {
       method: "POST",
@@ -48,22 +70,20 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${device.accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: to,
-        type: "text",
-        text: {
-          preview_url: false,
-          body: message,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log("[/api/whatsapp/send] ========================================");
+    console.log("[/api/whatsapp/send] 📥 WHATSAPP CLOUD API RESPONSE");
+    console.log("[/api/whatsapp/send] Status:", response.status, response.statusText);
+    console.log("[/api/whatsapp/send] Headers:", Object.fromEntries(response.headers.entries()));
+
     const data = await response.json();
+    console.log("[/api/whatsapp/send] Response body:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
-      console.error("WhatsApp API error:", data);
+      console.error("[/api/whatsapp/send] ❌ WhatsApp API error:", data);
+      console.log("[/api/whatsapp/send] ========================================");
       return NextResponse.json(
         {
           error: "Failed to send message",
@@ -73,7 +93,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("Message sent successfully:", data);
+    console.log("[/api/whatsapp/send] ✅ Message sent successfully:", data);
+    console.log("[/api/whatsapp/send] Message ID:", data.messages?.[0]?.id);
+    console.log("[/api/whatsapp/send] ========================================");
 
     return NextResponse.json(
       {

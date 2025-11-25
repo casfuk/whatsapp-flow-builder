@@ -97,33 +97,74 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
 
   console.log("[WhatsApp Message Service] Sending to WhatsApp API:", JSON.stringify(requestBody, null, 2));
 
+  // Log full request details (with sanitized token)
+  const apiUrl = `https://graph.facebook.com/v21.0/${config.phoneNumberId}/messages`;
+  console.log("[WhatsApp Message Service] ========================================");
+  console.log("[WhatsApp Message Service] 🚀 SENDING REQUEST TO WHATSAPP CLOUD API");
+  console.log("[WhatsApp Message Service] URL:", apiUrl);
+  console.log("[WhatsApp Message Service] Method: POST");
+  console.log("[WhatsApp Message Service] Headers:", {
+    Authorization: `Bearer ${config.accessToken.substring(0, 10)}...${config.accessToken.substring(config.accessToken.length - 4)}`,
+    "Content-Type": "application/json",
+  });
+  console.log("[WhatsApp Message Service] Body:", JSON.stringify(requestBody, null, 2));
+  console.log("[WhatsApp Message Service] ========================================");
+
   // 5) Send via WhatsApp Cloud API
-  const response = await fetch(
-    `https://graph.facebook.com/v21.0/${config.phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    }
-  );
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  // Log response details
+  console.log("[WhatsApp Message Service] ========================================");
+  console.log("[WhatsApp Message Service] 📥 WHATSAPP CLOUD API RESPONSE");
+  console.log("[WhatsApp Message Service] Status:", response.status, response.statusText);
+  console.log("[WhatsApp Message Service] Headers:", Object.fromEntries(response.headers.entries()));
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error("[WhatsApp Message Service] WhatsApp API error:", {
-      status: response.status,
-      statusText: response.statusText,
-      data: errorData,
+    // Try to parse error as JSON first, fall back to text
+    let errorData;
+    const contentType = response.headers.get("content-type");
+
+    try {
+      if (contentType && contentType.includes("application/json")) {
+        errorData = await response.json();
+        console.error("[WhatsApp Message Service] ❌ ERROR Response (JSON):", JSON.stringify(errorData, null, 2));
+      } else {
+        errorData = await response.text();
+        console.error("[WhatsApp Message Service] ❌ ERROR Response (Text):", errorData);
+      }
+    } catch (parseError) {
+      console.error("[WhatsApp Message Service] ❌ Could not parse error response:", parseError);
+      errorData = {};
+    }
+
+    console.error("[WhatsApp Message Service] ❌ REQUEST FAILED");
+    console.error("[WhatsApp Message Service] Failed request details:", {
+      url: apiUrl,
+      deviceId,
+      type: requestBody.type,
+      to: requestBody.to,
+      hasMediaId: !!(requestBody.image?.id || requestBody.document?.id || requestBody.audio?.id || requestBody.video?.id),
+      hasMediaLink: !!(requestBody.image?.link || requestBody.document?.link || requestBody.audio?.link || requestBody.video?.link),
+      payload: requestBody,
     });
-    throw new Error(`WhatsApp API error: ${response.status} ${response.statusText}`);
+    console.log("[WhatsApp Message Service] ========================================");
+
+    throw new Error(`WhatsApp API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
   }
 
   const responseData = await response.json();
   const whatsappMessageId = responseData.messages?.[0]?.id;
 
-  console.log("[WhatsApp Message Service] WhatsApp API success:", responseData);
+  console.log("[WhatsApp Message Service] ✅ SUCCESS Response:", JSON.stringify(responseData, null, 2));
+  console.log("[WhatsApp Message Service] Message ID:", whatsappMessageId || "N/A");
+  console.log("[WhatsApp Message Service] ========================================");
 
   // 6) Persist in Message table
   await prisma.message.create({

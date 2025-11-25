@@ -106,30 +106,53 @@ export async function sendWhatsAppTextMessage(to: string, body: string) {
 
   try {
     const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
+    const requestBody = {
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body },
+    };
+
+    console.log("[lib/whatsapp] ========================================");
+    console.log("[lib/whatsapp] 🚀 SENDING TEXT MESSAGE TO WHATSAPP CLOUD API");
+    console.log("[lib/whatsapp] URL:", url);
+    console.log("[lib/whatsapp] Method: POST");
+    console.log("[lib/whatsapp] Headers:", {
+      Authorization: `Bearer ${token.substring(0, 10)}...${token.substring(token.length - 4)}`,
+      "Content-Type": "application/json",
+    });
+    console.log("[lib/whatsapp] Body:", JSON.stringify(requestBody, null, 2));
+    console.log("[lib/whatsapp] ========================================");
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { body },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log("[lib/whatsapp] ========================================");
+    console.log("[lib/whatsapp] 📥 WHATSAPP CLOUD API RESPONSE");
+    console.log("[lib/whatsapp] Status:", res.status, res.statusText);
+    console.log("[lib/whatsapp] Headers:", Object.fromEntries(res.headers.entries()));
+
     const data = await res.json();
+    console.log("[lib/whatsapp] Response body:", JSON.stringify(data, null, 2));
 
     if (!res.ok) {
-      console.error("WhatsApp send error:", data);
+      console.error("[lib/whatsapp] ❌ WhatsApp send error:", data);
+      console.log("[lib/whatsapp] ========================================");
       return { success: false, error: data.error?.message };
     }
 
+    console.log("[lib/whatsapp] ✅ Message sent successfully");
+    console.log("[lib/whatsapp] Message ID:", data.messages?.[0]?.id);
+    console.log("[lib/whatsapp] ========================================");
     return { success: true, messageId: data.messages?.[0]?.id };
   } catch (error) {
-    console.error("WhatsApp send failed:", error);
+    console.error("[lib/whatsapp] ❌ EXCEPTION - WhatsApp send failed:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -153,34 +176,57 @@ export async function sendWhatsAppTemplate(
 
   try {
     const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
+    const requestBody = {
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: langCode },
+        components: components || [],
+      },
+    };
+
+    console.log("[lib/whatsapp] ========================================");
+    console.log("[lib/whatsapp] 🚀 SENDING TEMPLATE MESSAGE TO WHATSAPP CLOUD API");
+    console.log("[lib/whatsapp] URL:", url);
+    console.log("[lib/whatsapp] Method: POST");
+    console.log("[lib/whatsapp] Headers:", {
+      Authorization: `Bearer ${token.substring(0, 10)}...${token.substring(token.length - 4)}`,
+      "Content-Type": "application/json",
+    });
+    console.log("[lib/whatsapp] Body:", JSON.stringify(requestBody, null, 2));
+    console.log("[lib/whatsapp] ========================================");
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "template",
-        template: {
-          name: templateName,
-          language: { code: langCode },
-          components: components || [],
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log("[lib/whatsapp] ========================================");
+    console.log("[lib/whatsapp] 📥 WHATSAPP CLOUD API RESPONSE");
+    console.log("[lib/whatsapp] Status:", res.status, res.statusText);
+    console.log("[lib/whatsapp] Headers:", Object.fromEntries(res.headers.entries()));
+
     const data = await res.json();
+    console.log("[lib/whatsapp] Response body:", JSON.stringify(data, null, 2));
 
     if (!res.ok) {
-      console.error("WhatsApp template error:", data);
+      console.error("[lib/whatsapp] ❌ WhatsApp template error:", data);
+      console.log("[lib/whatsapp] ========================================");
       return { success: false, error: data.error?.message };
     }
 
+    console.log("[lib/whatsapp] ✅ Template sent successfully");
+    console.log("[lib/whatsapp] Message ID:", data.messages?.[0]?.id);
+    console.log("[lib/whatsapp] ========================================");
     return { success: true, messageId: data.messages?.[0]?.id };
   } catch (error) {
-    console.error("WhatsApp template failed:", error);
+    console.error("[lib/whatsapp] ❌ EXCEPTION - WhatsApp template failed:", error);
     return { success: false, error: String(error) };
   }
 }

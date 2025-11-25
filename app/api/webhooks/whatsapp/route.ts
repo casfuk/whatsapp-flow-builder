@@ -602,9 +602,29 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
         console.log(`[Flow Execution]   → send_whatsapp_media action`);
         const { to, mediaId, mediaUrl, mediaType, caption, fileName } = action.data || {};
 
+        console.log(`[Flow Execution]   → Media details:`, {
+          to,
+          mediaId: mediaId || 'none',
+          mediaUrl: mediaUrl || 'none',
+          mediaType,
+          caption: caption || 'none',
+          fileName: fileName || 'none',
+        });
+
+        // Guard against blob URLs (browser-only URLs that WhatsApp Cloud API cannot access)
+        if (mediaUrl && mediaUrl.startsWith("blob:")) {
+          console.error("[send_whatsapp_media] ❌ REJECTED: blob: URL detected! WhatsApp Cloud API cannot access blob URLs.", {
+            mediaUrl,
+            to,
+            mediaType,
+          });
+          console.error("[send_whatsapp_media] ❌ This is a browser-only URL. Use mediaUrl (public HTTP/HTTPS URL) instead of fileUrl.");
+          continue;
+        }
+
         // Guard against missing data
         const hasMediaId = mediaId && mediaId !== "";
-        const hasMediaUrl = mediaUrl && mediaUrl !== "";
+        const hasMediaUrl = mediaUrl && mediaUrl !== "" && !mediaUrl.startsWith("blob:");
 
         if (!to || !mediaType || (!hasMediaId && !hasMediaUrl) || !deviceId) {
           console.error("[send_whatsapp_media] Missing required data", {
@@ -613,9 +633,13 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
             mediaUrl,
             mediaType,
             deviceId,
+            hasMediaId,
+            hasMediaUrl,
           });
           continue;
         }
+
+        console.log(`[Flow Execution]   → Using: ${hasMediaId ? `Media ID: ${mediaId}` : `Media URL: ${mediaUrl}`}`);
 
         try {
           // Build payload based on media type
@@ -934,9 +958,29 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
           console.log(`[Flow Continue]   → Sending media message`);
           const { to, mediaId, mediaUrl, mediaType, caption, fileName } = action.data || {};
 
+          console.log(`[Flow Continue]   → Media details:`, {
+            to,
+            mediaId: mediaId || 'none',
+            mediaUrl: mediaUrl || 'none',
+            mediaType,
+            caption: caption || 'none',
+            fileName: fileName || 'none',
+          });
+
+          // Guard against blob URLs (browser-only URLs that WhatsApp Cloud API cannot access)
+          if (mediaUrl && mediaUrl.startsWith("blob:")) {
+            console.error("[Flow Continue] ❌ REJECTED: blob: URL detected! WhatsApp Cloud API cannot access blob URLs.", {
+              mediaUrl,
+              to,
+              mediaType,
+            });
+            console.error("[Flow Continue] ❌ This is a browser-only URL. Use mediaUrl (public HTTP/HTTPS URL) instead of fileUrl.");
+            continue;
+          }
+
           // Guard against missing data
           const hasMediaId = mediaId && mediaId !== "";
-          const hasMediaUrl = mediaUrl && mediaUrl !== "";
+          const hasMediaUrl = mediaUrl && mediaUrl !== "" && !mediaUrl.startsWith("blob:");
 
           if (!to || !mediaType || (!hasMediaId && !hasMediaUrl) || !deviceId) {
             console.error("[send_whatsapp_media] Missing required data", {
@@ -945,9 +989,13 @@ async function continueFlow(session: any, flow: any, phoneNumber: string, userRe
               mediaUrl,
               mediaType,
               deviceId,
+              hasMediaId,
+              hasMediaUrl,
             });
             continue;
           }
+
+          console.log(`[Flow Continue]   → Using: ${hasMediaId ? `Media ID: ${mediaId}` : `Media URL: ${mediaUrl}`}`);
 
           try {
             // Build payload based on media type
