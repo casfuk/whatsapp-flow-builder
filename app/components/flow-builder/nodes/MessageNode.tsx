@@ -434,150 +434,23 @@ function AudioForm({
 }) {
   const fileUrl = (data as AudioMessageData).fileUrl ?? "";
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [recordingError, setRecordingError] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleFileUpload(file, "audio");
   };
 
-  const startRecording = async () => {
-    try {
-      setRecordingError(null);
+  const showRecordingInstructions = () => {
+    // Show informative message about how to record audio manually
+    alert(`Cómo grabar tu audio
 
-      // Request microphone permission
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+Para grabar un audio compatible con WhatsApp, sigue estos pasos:
 
-      // Check if browser supports MP3 recording
-      const mp3MimeType = "audio/mpeg";
+1️⃣ Usa la extensión "Chrome Audio Capture" en tu navegador para grabar tu mensaje.
 
-      if (typeof MediaRecorder === "undefined") {
-        console.error(`[Audio Recording] MediaRecorder API not available`);
-        setRecordingError(
-          "❌ Tu navegador no soporta grabación de audio. Prueba con Chrome, Edge o Firefox, o sube un archivo de audio."
-        );
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
+2️⃣ Descarga el archivo como MP3 en tu ordenador.
 
-      if (!MediaRecorder.isTypeSupported(mp3MimeType)) {
-        console.warn(`[Audio Recording] ⚠️ Browser does not support MP3 recording (audio/mpeg)`);
-        console.warn(`[Audio Recording] Please upload an MP3 file instead`);
-        setRecordingError(
-          "⚠️ Tu navegador no soporta grabación en formato MP3. Por favor, sube un archivo de audio en formato MP3."
-        );
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-
-      console.log(`[Audio Recording] ✅ Browser supports MP3 recording (audio/mpeg)`);
-
-      // Create MediaRecorder with MP3 format
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: mp3MimeType });
-
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      // Collect audio chunks
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      // Handle recording stop
-      mediaRecorder.onstop = async () => {
-        console.log(`[Audio Recording] ========================================`);
-        console.log(`[Audio Recording] 🎤 Recording stopped`);
-        console.log(`[Audio Recording] MIME type: audio/mpeg`);
-        console.log(`[Audio Recording] File extension: mp3`);
-        console.log(`[Audio Recording] Blob size: ${audioChunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0)} bytes`);
-        console.log(`[Audio Recording] ✅ Using WhatsApp-compatible MP3 format!`);
-
-        // Create MP3 blob
-        const mp3Blob = new Blob(audioChunksRef.current, { type: "audio/mpeg" });
-
-        // Generate unique filename with timestamp to avoid conflicts
-        const timestamp = Date.now();
-        const uniqueFileName = `recording-${timestamp}.mp3`;
-
-        console.log(`[Audio Recording] Creating file: ${uniqueFileName}`);
-        console.log(`[Audio Recording] ========================================`);
-
-        // Convert blob to File and upload using centralized handler
-        const mp3File = new File([mp3Blob], uniqueFileName, { type: "audio/mpeg" });
-        await handleFileUpload(mp3File, "audio");
-        setUploadedFileName(`grabación-${timestamp}.mp3`);
-
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-
-        // Clear timer
-        if (timerIntervalRef.current) {
-          clearInterval(timerIntervalRef.current);
-          timerIntervalRef.current = null;
-        }
-      };
-
-      // Start recording
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-
-      // Start timer
-      timerIntervalRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-
-    } catch (error: any) {
-      console.error('[Audio Recording] Error:', error);
-      console.error('[Audio Recording] Error name:', error?.name);
-      console.error('[Audio Recording] Error message:', error?.message);
-
-      // Provide specific error messages based on error type
-      if (error?.name === "NotAllowedError") {
-        setRecordingError(
-          "🎤 Acceso al micrófono denegado. Por favor, haz clic en el icono del candado en la barra de direcciones y permite el acceso al micrófono."
-        );
-      } else if (error?.name === "NotFoundError") {
-        setRecordingError(
-          "🎤 No se encontró ningún micrófono. Por favor, conecta un micrófono y vuelve a intentarlo."
-        );
-      } else if (error?.name === "NotSupportedError") {
-        setRecordingError(
-          "❌ Tu navegador no soporta grabación de audio. Prueba con Chrome, Edge o Firefox, o sube un archivo de audio."
-        );
-      } else if (error?.name === "NotReadableError") {
-        setRecordingError(
-          "🎤 El micrófono está siendo usado por otra aplicación. Cierra otras apps y vuelve a intentarlo."
-        );
-      } else {
-        setRecordingError(
-          `Error al iniciar la grabación: ${error?.message || "Error desconocido"}. Inténtalo de nuevo o sube un archivo.`
-        );
-      }
-
-      setIsRecording(false);
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+3️⃣ Vuelve aquí y súbelo con el botón "Cargar archivo".`);
   };
 
   return (
@@ -620,10 +493,7 @@ function AudioForm({
               e.stopPropagation();
               fileInputRef.current?.click();
             }}
-            disabled={isRecording}
-            className={`flex-1 py-2 px-4 bg-[#10B981] text-white rounded-lg text-xs font-medium ${
-              isRecording ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#059669]'
-            }`}
+            className="flex-1 py-2 px-4 bg-[#10B981] text-white rounded-lg text-xs font-medium hover:bg-[#059669]"
           >
             Cargar archivo
           </button>
@@ -631,38 +501,13 @@ function AudioForm({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              if (isRecording) {
-                stopRecording();
-              } else {
-                startRecording();
-              }
+              showRecordingInstructions();
             }}
-            className={`flex-1 py-2 px-4 text-white rounded-lg text-xs font-medium ${
-              isRecording
-                ? 'bg-[#EF4444] hover:bg-[#DC2626]'
-                : 'bg-[#6B7280] hover:bg-[#4B5563]'
-            }`}
+            className="flex-1 py-2 px-4 bg-[#6B7280] text-white rounded-lg text-xs font-medium hover:bg-[#4B5563]"
           >
-            {isRecording ? '⏹ Detener' : '🎤 Grabar audio'}
+            🎤 Grabar audio
           </button>
         </div>
-
-        {/* Recording indicator */}
-        {isRecording && (
-          <div className="flex items-center gap-2 p-2 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg">
-            <div className="w-3 h-3 bg-[#EF4444] rounded-full animate-pulse"></div>
-            <span className="text-xs font-medium text-[#991B1B]">
-              Grabando... {formatTime(recordingTime)}
-            </span>
-          </div>
-        )}
-
-        {/* Error message */}
-        {recordingError && (
-          <div className="p-2 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg">
-            <p className="text-xs text-[#991B1B]">{recordingError}</p>
-          </div>
-        )}
 
         <p className="text-[11px] text-[#656889] mt-1">
           {isUploading
