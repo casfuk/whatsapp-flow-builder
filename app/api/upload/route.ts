@@ -24,6 +24,21 @@ export async function POST(req: NextRequest) {
     console.log(`[/api/upload] File type: ${mimeType}`);
     console.log(`[/api/upload] File size: ${file.size} bytes`);
 
+    // Extra validation for audio files
+    if (fileName.endsWith('.ogg') || fileName.endsWith('.webm') || mimeType.startsWith('audio/')) {
+      console.log(`[/api/upload] 🎵 AUDIO FILE DETECTED`);
+      console.log(`[/api/upload] Extension: ${fileName.split('.').pop()}`);
+      console.log(`[/api/upload] MIME Type: ${mimeType}`);
+
+      if (mimeType.includes('ogg') && mimeType.includes('opus')) {
+        console.log(`[/api/upload] ✅ WhatsApp-compatible format: ${mimeType}`);
+      } else if (mimeType.includes('webm')) {
+        console.log(`[/api/upload] ⚠️ WebM format - WhatsApp support may vary: ${mimeType}`);
+      } else {
+        console.log(`[/api/upload] ℹ️ Audio format: ${mimeType}`);
+      }
+    }
+
     // Upload to Vercel Blob Storage with random suffix to avoid conflicts
     const blob = await put(fileName, file, {
       access: "public",

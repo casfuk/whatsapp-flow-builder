@@ -494,13 +494,26 @@ function AudioForm({
         const finalType = mediaRecorder.mimeType || selectedType || "audio/webm";
         const extension = finalType.includes("ogg") ? "ogg" : "webm";
 
-        console.log(`[Audio Recording] Final format: ${finalType}, extension: ${extension}`);
+        console.log(`[Audio Recording] ========================================`);
+        console.log(`[Audio Recording] 🎤 Recording stopped`);
+        console.log(`[Audio Recording] Final MIME type: ${finalType}`);
+        console.log(`[Audio Recording] File extension: ${extension}`);
+        console.log(`[Audio Recording] Blob size: ${audioChunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0)} bytes`);
+
+        if (finalType.includes('ogg') && finalType.includes('opus')) {
+          console.log(`[Audio Recording] ✅ Using WhatsApp-compatible format!`);
+        } else if (finalType.includes('webm')) {
+          console.log(`[Audio Recording] ⚠️ Using WebM format (WhatsApp support may vary)`);
+        }
 
         const audioBlob = new Blob(audioChunksRef.current, { type: finalType });
 
         // Generate unique filename with timestamp to avoid conflicts
         const timestamp = Date.now();
         const uniqueFileName = `recording-${timestamp}.${extension}`;
+
+        console.log(`[Audio Recording] Creating file: ${uniqueFileName}`);
+        console.log(`[Audio Recording] ========================================`);
 
         // Convert blob to File and upload using centralized handler
         const audioFile = new File([audioBlob], uniqueFileName, { type: finalType });
