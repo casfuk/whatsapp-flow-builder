@@ -454,29 +454,54 @@ function AudioForm({
       // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Create MediaRecorder with WhatsApp-compatible format
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/ogg;codecs=opus',
-      });
+      // Try formats in order of preference: OGG/Opus (WhatsApp) → WebM/Opus → WebM (fallback)
+      const preferredTypes = [
+        "audio/ogg;codecs=opus",   // WhatsApp official support
+        "audio/webm;codecs=opus",  // Good quality, widely supported
+        "audio/webm",              // Universal fallback
+      ];
+
+      let selectedType = "";
+
+      if (typeof MediaRecorder !== "undefined") {
+        for (const t of preferredTypes) {
+          if (MediaRecorder.isTypeSupported(t)) {
+            selectedType = t;
+            console.log(`[Audio Recording] Selected format: ${selectedType}`);
+            break;
+          }
+        }
+      }
+
+      // Create MediaRecorder with best supported format
+      const mediaRecorder = selectedType !== ""
+        ? new MediaRecorder(stream, { mimeType: selectedType })
+        : new MediaRecorder(stream);
 
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
       // Collect audio chunks
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       // Handle recording stop
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg;codecs=opus' });
+        // Determine actual format used
+        const finalType = mediaRecorder.mimeType || selectedType || "audio/webm";
+        const extension = finalType.includes("ogg") ? "ogg" : "webm";
+
+        console.log(`[Audio Recording] Final format: ${finalType}, extension: ${extension}`);
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: finalType });
 
         // Convert blob to File and upload using centralized handler
-        const audioFile = new File([audioBlob], "recording.ogg", { type: 'audio/ogg;codecs=opus' });
+        const audioFile = new File([audioBlob], `recording.${extension}`, { type: finalType });
         await handleFileUpload(audioFile, "audio");
-        setUploadedFileName("grabación.ogg");
+        setUploadedFileName(`grabación.${extension}`);
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -498,9 +523,20 @@ function AudioForm({
         setRecordingTime(prev => prev + 1);
       }, 1000);
 
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      setRecordingError('No se pudo acceder al micrófono. Por favor, permite el acceso.');
+    } catch (error: any) {
+      console.error('[Audio Recording] Error:', error);
+
+      // Provide specific error messages based on error type
+      if (error?.name === "NotAllowedError" || error?.name === "NotFoundError") {
+        setRecordingError("No se pudo acceder al micrófono. Por favor, permite el acceso.");
+      } else if (error?.name === "NotSupportedError") {
+        setRecordingError(
+          "Tu navegador no soporta esta grabación de audio. Prueba con otro navegador (Chrome/Edge) o sube un archivo de audio."
+        );
+      } else {
+        setRecordingError("Error al iniciar la grabación. Inténtalo de nuevo.");
+      }
+
       setIsRecording(false);
     }
   };
