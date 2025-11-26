@@ -13,15 +13,16 @@ import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { triggerId: string } }
+  { params }: { params: Promise<{ triggerId: string }> }
 ) {
+  const { triggerId } = await params;
   console.log("[Third-Party Webhook] *** NEW REQUEST ***");
-  console.log(`[Third-Party Webhook] Trigger ID: ${params.triggerId}`);
+  console.log(`[Third-Party Webhook] Trigger ID: ${triggerId}`);
 
   try {
     // 1. Look up the trigger
     const trigger = await prisma.thirdPartyTrigger.findUnique({
-      where: { id: params.triggerId },
+      where: { id: triggerId },
       include: {
         flow: {
           include: {
