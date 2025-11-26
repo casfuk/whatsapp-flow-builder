@@ -98,13 +98,19 @@ export async function POST(request: NextRequest) {
       if (trigger.deviceId) {
         try {
           console.log('[Flow POST] Creating new ThirdPartyTrigger');
+          const fieldMapping = trigger.fieldMappings
+            ? JSON.stringify(trigger.fieldMappings)
+            : JSON.stringify([]);
+          const runOncePerContact = trigger.oncePerContact || false;
+
           const dbTrigger = await prisma.thirdPartyTrigger.create({
             data: {
               flowId: flow.id,
               deviceId: trigger.deviceId,
               type: trigger.type || 'facebook_lead',
               title: trigger.name || null,
-              fieldMapping: JSON.stringify({}),
+              fieldMapping,
+              runOncePerContact,
             },
           });
 

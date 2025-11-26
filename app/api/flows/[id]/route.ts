@@ -64,6 +64,14 @@ export async function GET(
         if (dbTrigger) {
           console.log('[API GET] Found ThirdPartyTrigger:', dbTrigger.id);
           (startNode.data as any).trigger.thirdPartyTriggerId = dbTrigger.id;
+          // Parse and include field mappings
+          try {
+            const fieldMappings = JSON.parse(dbTrigger.fieldMapping);
+            (startNode.data as any).trigger.fieldMappings = fieldMappings;
+          } catch (error) {
+            console.error('[API GET] Error parsing fieldMapping:', error);
+            (startNode.data as any).trigger.fieldMappings = [];
+          }
         }
       } catch (error) {
         console.error('[API GET] Error loading ThirdPartyTrigger:', error);
@@ -328,6 +336,11 @@ export async function PUT(
           });
 
           let dbTrigger;
+          const fieldMapping = trigger.fieldMappings
+            ? JSON.stringify(trigger.fieldMappings)
+            : JSON.stringify([]);
+          const runOncePerContact = trigger.oncePerContact || false;
+
           if (existingTrigger) {
             console.log('[API PUT] Updating existing ThirdPartyTrigger:', existingTrigger.id);
             dbTrigger = await prisma.thirdPartyTrigger.update({
@@ -335,6 +348,8 @@ export async function PUT(
               data: {
                 type: trigger.type || 'facebook_lead',
                 title: trigger.name || null,
+                fieldMapping,
+                runOncePerContact,
               },
             });
           } else {
@@ -345,7 +360,8 @@ export async function PUT(
                 deviceId: trigger.deviceId,
                 type: trigger.type || 'facebook_lead',
                 title: trigger.name || null,
-                fieldMapping: JSON.stringify({}),
+                fieldMapping,
+                runOncePerContact,
               },
             });
           }

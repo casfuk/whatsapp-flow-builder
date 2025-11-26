@@ -50,28 +50,76 @@ export async function POST(
     const payload = await request.json();
     console.log(`[Third-Party Webhook] Payload received:`, JSON.stringify(payload, null, 2));
 
-    // 3. Extract contact data from payload
-    // Support both direct fields and nested structures
-    const fullName = payload.full_name || payload.name || payload.fullName || null;
-    const phoneNumber = payload.phone_number || payload.phone || payload.phoneNumber || null;
-    const email = payload.email || null;
+    // 3. Extract contact data from payload using field mapping
+    let fullName = null;
+    let phoneNumber = null;
+    let email = null;
+    const customFieldsData: Record<string, any> = {};
+
+    // Parse field mappings
+    let fieldMappings: any[] = [];
+    try {
+      fieldMappings = JSON.parse(trigger.fieldMapping);
+    } catch (error) {
+      console.error(`[Third-Party Webhook] Error parsing fieldMapping:`, error);
+    }
+
+    console.log(`[Third-Party Webhook] Field mappings:`, fieldMappings);
+
+    if (fieldMappings && fieldMappings.length > 0) {
+      // Use configured field mappings
+      for (const mapping of fieldMappings) {
+        const value = payload[mapping.sourceKey];
+        if (value !== undefined && value !== null) {
+          if (mapping.targetType === "standard") {
+            if (mapping.targetKey === "name") fullName = value;
+            else if (mapping.targetKey === "phone") phoneNumber = value;
+            else if (mapping.targetKey === "email") email = value;
+          } else if (mapping.targetType === "custom") {
+            customFieldsData[mapping.targetKey] = value;
+          }
+        }
+      }
+    } else {
+      // Fallback to default field names
+      fullName = payload.full_name || payload.name || payload.fullName || null;
+      phoneNumber = payload.phone_number || payload.phone || payload.phoneNumber || null;
+      email = payload.email || null;
+    }
 
     console.log(`[Third-Party Webhook] Extracted data:`, {
       fullName,
       phoneNumber,
       email,
+      customFields: customFieldsData,
     });
 
     // Validate required fields
     if (!phoneNumber) {
       console.error(`[Third-Party Webhook] Missing phone number in payload`);
       return NextResponse.json(
-        { error: "Missing phone_number in payload" },
+        { error: "Missing phone_number in payload (no mapping configured or field not found)" },
         { status: 400 }
       );
     }
 
     // 4. Create or update contact
+    const createMetadata = {
+      triggerId: trigger.id,
+      triggerType: trigger.type,
+      receivedAt: new Date().toISOString(),
+      originalPayload: payload,
+      customFields: customFieldsData,
+    };
+
+    const updateMetadata = {
+      triggerId: trigger.id,
+      triggerType: trigger.type,
+      lastReceivedAt: new Date().toISOString(),
+      lastPayload: payload,
+      customFields: customFieldsData,
+    };
+
     const contact = await prisma.contact.upsert({
       where: {
         phone_device: {
@@ -85,22 +133,12 @@ export async function POST(
         email: email,
         deviceId: trigger.deviceId,
         source: "third_party_webhook",
-        metadata: JSON.stringify({
-          triggerId: trigger.id,
-          triggerType: trigger.type,
-          receivedAt: new Date().toISOString(),
-          originalPayload: payload,
-        }),
+        metadata: JSON.stringify(createMetadata),
       },
       update: {
         name: fullName || undefined,
         email: email || undefined,
-        metadata: JSON.stringify({
-          triggerId: trigger.id,
-          triggerType: trigger.type,
-          lastReceivedAt: new Date().toISOString(),
-          lastPayload: payload,
-        }),
+        metadata: JSON.stringify(updateMetadata),
         updatedAt: new Date(),
       },
     });
@@ -119,7 +157,32 @@ export async function POST(
 
     console.log(`[Third-Party Webhook] Trigger updated with last received data`);
 
-    // 6. Start the flow for this contact
+    // 6. Check if runOncePerContact is enabled and contact already triggered
+    if (trigger.runOncePerContact) {
+      console.log(`[Third-Party Webhook] Checking runOncePerContact...`);
+      const existingExecution = await prisma.thirdPartyTriggerExecution.findUnique({
+        where: {
+          triggerId_contactId: {
+            triggerId: trigger.id,
+            contactId: contact.id,
+          },
+        },
+      });
+
+      if (existingExecution) {
+        console.log(`[Third-Party Webhook] ⚠ Contact already triggered this flow (runOncePerContact enabled)`);
+        console.log(`[Third-Party Webhook] Previous execution: ${existingExecution.createdAt}`);
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "runOncePerContact_already_triggered",
+          contactId: contact.id,
+          previouslyTriggeredAt: existingExecution.createdAt,
+        });
+      }
+    }
+
+    // 7. Start the flow for this contact
     await executeFlowForContact({
       flowId: trigger.flowId,
       deviceId: trigger.deviceId,
@@ -130,6 +193,22 @@ export async function POST(
     });
 
     console.log(`[Third-Party Webhook] ✓ Flow executed successfully`);
+
+    // 8. Create execution record if runOncePerContact is enabled
+    if (trigger.runOncePerContact) {
+      try {
+        await prisma.thirdPartyTriggerExecution.create({
+          data: {
+            triggerId: trigger.id,
+            contactId: contact.id,
+          },
+        });
+        console.log(`[Third-Party Webhook] ✓ Created execution record for runOncePerContact`);
+      } catch (error) {
+        console.error(`[Third-Party Webhook] Error creating execution record:`, error);
+        // Don't fail the whole request if we can't create the execution record
+      }
+    }
 
     return NextResponse.json({
       ok: true,

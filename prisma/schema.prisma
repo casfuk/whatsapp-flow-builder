@@ -135,20 +135,21 @@ model ContactTag {
 }
 
 model Contact {
-  id              String                    @id @default(cuid())
-  phone           String                    @map("phoneNumber")
-  name            String?
-  email           String?
-  profileImageUrl String?                   @map("profilePic")
-  source          String                    @default("manual")
-  metadata        String                    @default("{}")
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
-  assignedAdminId String?
-  notes           String?
-  deviceId        String?
-  customValues    ContactCustomFieldValue[]
-  tags            ContactTag[]
+  id                          String                       @id @default(cuid())
+  phone                       String                       @map("phoneNumber")
+  name                        String?
+  email                       String?
+  profileImageUrl             String?                      @map("profilePic")
+  source                      String                       @default("manual")
+  metadata                    String                       @default("{}")
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  assignedAdminId             String?
+  notes                       String?
+  deviceId                    String?
+  customValues                ContactCustomFieldValue[]
+  tags                        ContactTag[]
+  thirdPartyTriggerExecutions ThirdPartyTriggerExecution[]
 
   @@unique([phone, deviceId], name: "phone_device")
   @@index([phone])
@@ -303,22 +304,38 @@ model MassSend {
 }
 
 model ThirdPartyTrigger {
-  id                 String    @id @default(cuid())
+  id                 String                       @id @default(cuid())
   flowId             String
   deviceId           String
-  type               String    @default("facebook_lead")
+  type               String                       @default("facebook_lead")
   title              String?
-  fieldMapping       String    @default("{}")
+  fieldMapping       String                       @default("{}")
+  runOncePerContact  Boolean                      @default(false)
   lastReceivedAt     DateTime?
   lastPayloadPreview String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
 
-  flow   Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
-  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  flow       Flow                            @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  device     Device                          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  executions ThirdPartyTriggerExecution[]
 
   @@index([flowId])
   @@index([deviceId])
+}
+
+model ThirdPartyTriggerExecution {
+  id        String   @id @default(cuid())
+  triggerId String
+  contactId String
+  createdAt DateTime @default(now())
+
+  trigger ThirdPartyTrigger @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+  contact Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([triggerId, contactId])
+  @@index([triggerId])
+  @@index([contactId])
 }
 
 model AiAgent {

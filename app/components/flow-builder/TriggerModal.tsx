@@ -71,6 +71,11 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
         setSmartTrigger(trigger.smartTrigger ?? false);
       } else if (trigger.type === "third_party") {
         setDeviceId(trigger.deviceId ?? null);
+        setThirdPartyTriggerId((trigger as any).thirdPartyTriggerId ?? null);
+        // Load field mappings if they exist
+        if ((trigger as any).fieldMappings) {
+          setFieldMappings((trigger as any).fieldMappings);
+        }
       }
     }
   }, [trigger]);
@@ -93,13 +98,64 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
       : null
   );
 
+  // Field mapping state
+  type FieldMapping = {
+    id: string;
+    sourceKey: string;
+    targetType: "standard" | "custom";
+    targetKey: string;
+  };
+
+  const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
+  const [customFields, setCustomFields] = useState<any[]>([]);
+
+  // Fetch custom fields on mount
+  useEffect(() => {
+    const fetchCustomFields = async () => {
+      try {
+        const response = await fetch("/api/custom-fields");
+        if (response.ok) {
+          const fields = await response.json();
+          setCustomFields(fields);
+        }
+      } catch (error) {
+        console.error("Failed to fetch custom fields:", error);
+      }
+    };
+
+    fetchCustomFields();
+  }, []);
+
   // Generate webhook URL if we have a third-party trigger ID
   const webhookUrl = thirdPartyTriggerId
     ? `${process.env.NEXT_PUBLIC_APP_URL || "https://flows-api.funnelchat.app"}/api/v1/integrations/${thirdPartyTriggerId}/webhook`
-    : "Guardando...";
+    : "";
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
+  };
+
+  // Field mapping functions
+  const addFieldMapping = () => {
+    setFieldMappings([
+      ...fieldMappings,
+      {
+        id: `mapping-${Date.now()}`,
+        sourceKey: "",
+        targetType: "standard",
+        targetKey: "name",
+      },
+    ]);
+  };
+
+  const removeFieldMapping = (id: string) => {
+    setFieldMappings(fieldMappings.filter((m) => m.id !== id));
+  };
+
+  const updateFieldMapping = (id: string, updates: Partial<FieldMapping>) => {
+    setFieldMappings(
+      fieldMappings.map((m) => (m.id === id ? { ...m, ...updates } : m))
+    );
   };
 
   // Keyword input for message_received - textarea with parsing
@@ -171,6 +227,7 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
         fields: [],
         oncePerContact,
         thirdPartyTriggerId, // Pass the DB trigger ID if it exists
+        fieldMappings, // Include field mappings
       } as any;
 
       onSave(newTrigger);
@@ -432,8 +489,9 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
                       <input
                         type="text"
                         value={webhookUrl}
+                        placeholder="Guarda el flujo para generar la URL"
                         readOnly
-                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 pr-10 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 pr-10 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
                       />
                       <button
                         onClick={handleCopyWebhook}
@@ -469,11 +527,122 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
                     </p>
                   </div>
 
-                  {/* Agregar campo button */}
-                  <div className="flex justify-end">
-                    <button className="inline-flex items-center gap-1 rounded-lg bg-[#6D5BFA] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#5B4BD8]">
+                  {/* Field Mapping */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Mapeo de campos
+                    </label>
+
+                    {/* Field mapping rows */}
+                    {fieldMappings.length > 0 && (
+                      <div className="space-y-2 mb-3">
+                        {fieldMappings.map((mapping) => (
+                          <div key={mapping.id} className="flex gap-2 items-start">
+                            {/* Source key input */}
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                value={mapping.sourceKey}
+                                onChange={(e) =>
+                                  updateFieldMapping(mapping.id, {
+                                    sourceKey: e.target.value,
+                                  })
+                                }
+                                placeholder="Campo de origen (ej: full_name)"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
+                              />
+                            </div>
+
+                            {/* Arrow */}
+                            <div className="flex items-center pt-2">
+                              <svg
+                                className="w-4 h-4 text-gray-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 5l7 7-7 7"
+                                />
+                              </svg>
+                            </div>
+
+                            {/* Target dropdown */}
+                            <div className="flex-1">
+                              <select
+                                value={`${mapping.targetType}:${mapping.targetKey}`}
+                                onChange={(e) => {
+                                  const [targetType, targetKey] = e.target.value.split(
+                                    ":"
+                                  );
+                                  updateFieldMapping(mapping.id, {
+                                    targetType: targetType as "standard" | "custom",
+                                    targetKey,
+                                  });
+                                }}
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
+                              >
+                                <optgroup label="Campos estándar">
+                                  <option value="standard:name">Nombre</option>
+                                  <option value="standard:phone">Teléfono</option>
+                                  <option value="standard:email">Email</option>
+                                </optgroup>
+                                {customFields.length > 0 && (
+                                  <optgroup label="Campos personalizados">
+                                    {customFields.map((field) => (
+                                      <option
+                                        key={field.id}
+                                        value={`custom:${field.key}`}
+                                      >
+                                        {field.name}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                              </select>
+                            </div>
+
+                            {/* Delete button */}
+                            <button
+                              type="button"
+                              onClick={() => removeFieldMapping(mapping.id)}
+                              className="mt-2 text-gray-400 hover:text-red-500 transition-colors"
+                              title="Eliminar"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add field button */}
+                    <button
+                      type="button"
+                      onClick={addFieldMapping}
+                      className="inline-flex items-center gap-1 rounded-lg bg-[#6D5BFA] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#5B4BD8]"
+                    >
                       + Agregar campo
                     </button>
+
+                    <p className="text-xs text-gray-500 mt-2">
+                      Mapea los campos del webhook a los campos de contacto. Si no configuras ningún mapeo, se usarán los campos por defecto (full_name, phone_number, email).
+                    </p>
                   </div>
                 </>
               )}
