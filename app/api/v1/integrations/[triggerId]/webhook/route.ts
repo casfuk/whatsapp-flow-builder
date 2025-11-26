@@ -35,7 +35,7 @@ export async function POST(
     });
 
     if (!trigger) {
-      console.error(`[Third-Party Webhook] Trigger not found: ${params.triggerId}`);
+      console.error(`[Third-Party Webhook] Trigger not found: ${triggerId}`);
       return NextResponse.json(
         { error: "Trigger not found" },
         { status: 404 }
