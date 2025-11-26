@@ -88,6 +88,49 @@ export async function POST(request: NextRequest) {
       return newFlow;
     });
 
+    // Handle third-party trigger creation
+    console.log('[Flow POST] Checking for third-party trigger...');
+    const startNode = nodes?.find((n: any) => n.type === 'start');
+    if (startNode && startNode.data?.trigger?.type === 'third_party') {
+      const trigger = startNode.data.trigger;
+      console.log('[Flow POST] Found third_party trigger:', trigger);
+
+      if (trigger.deviceId) {
+        try {
+          console.log('[Flow POST] Creating new ThirdPartyTrigger');
+          const dbTrigger = await prisma.thirdPartyTrigger.create({
+            data: {
+              flowId: flow.id,
+              deviceId: trigger.deviceId,
+              type: trigger.type || 'facebook_lead',
+              title: trigger.name || null,
+              fieldMapping: JSON.stringify({}),
+            },
+          });
+
+          console.log('[Flow POST] ThirdPartyTrigger created:', dbTrigger.id);
+
+          // Update the start node to include the triggerId
+          await prisma.flowStep.update({
+            where: { id: startNode.id },
+            data: {
+              configJson: JSON.stringify({
+                ...startNode.data,
+                trigger: {
+                  ...trigger,
+                  thirdPartyTriggerId: dbTrigger.id,
+                },
+              }),
+            },
+          });
+
+          console.log('[Flow POST] Start node updated with thirdPartyTriggerId');
+        } catch (error) {
+          console.error('[Flow POST] Error creating ThirdPartyTrigger:', error);
+        }
+      }
+    }
+
     // Return complete flow with steps and connections
     const fullFlow = await prisma.flow.findUnique({
       where: { id: flow.id },

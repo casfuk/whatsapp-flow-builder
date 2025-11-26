@@ -48,6 +48,28 @@ export async function GET(
       sourceHandle: conn.sourceHandle || undefined,
     }));
 
+    // Load third-party trigger ID for start nodes with third_party triggers
+    console.log('[API GET] Checking for third-party triggers...');
+    const startNode = nodes.find((n) => n.type === 'start');
+    if (startNode && (startNode.data as any)?.trigger?.type === 'third_party') {
+      try {
+        const trigger = (startNode.data as any).trigger;
+        const dbTrigger = await prisma.thirdPartyTrigger.findFirst({
+          where: {
+            flowId: flow.id,
+            deviceId: trigger.deviceId,
+          },
+        });
+
+        if (dbTrigger) {
+          console.log('[API GET] Found ThirdPartyTrigger:', dbTrigger.id);
+          (startNode.data as any).trigger.thirdPartyTriggerId = dbTrigger.id;
+        }
+      } catch (error) {
+        console.error('[API GET] Error loading ThirdPartyTrigger:', error);
+      }
+    }
+
     // Migration: Fix multipleChoice nodes to have options for all their connections
     console.log('[API GET] Running multipleChoice migration...');
     const migratedNodes = nodes.map((node) => {
@@ -287,6 +309,70 @@ export async function PUT(
 
       console.log('[API PUT] Transaction complete');
     });
+
+    // Handle third-party trigger creation/update
+    console.log('[API PUT] Checking for third-party trigger...');
+    const startNode = nodes?.find((n: any) => n.type === 'start');
+    if (startNode && startNode.data?.trigger?.type === 'third_party') {
+      const trigger = startNode.data.trigger;
+      console.log('[API PUT] Found third_party trigger:', trigger);
+
+      if (trigger.deviceId) {
+        try {
+          // Check if we already have a ThirdPartyTrigger for this flow
+          const existingTrigger = await prisma.thirdPartyTrigger.findFirst({
+            where: {
+              flowId: id,
+              deviceId: trigger.deviceId,
+            },
+          });
+
+          let dbTrigger;
+          if (existingTrigger) {
+            console.log('[API PUT] Updating existing ThirdPartyTrigger:', existingTrigger.id);
+            dbTrigger = await prisma.thirdPartyTrigger.update({
+              where: { id: existingTrigger.id },
+              data: {
+                type: trigger.type || 'facebook_lead',
+                title: trigger.name || null,
+              },
+            });
+          } else {
+            console.log('[API PUT] Creating new ThirdPartyTrigger');
+            dbTrigger = await prisma.thirdPartyTrigger.create({
+              data: {
+                flowId: id,
+                deviceId: trigger.deviceId,
+                type: trigger.type || 'facebook_lead',
+                title: trigger.name || null,
+                fieldMapping: JSON.stringify({}),
+              },
+            });
+          }
+
+          console.log('[API PUT] ThirdPartyTrigger saved:', dbTrigger.id);
+
+          // Update the start node in the database to include the triggerId
+          await prisma.flowStep.update({
+            where: { id: startNode.id },
+            data: {
+              configJson: JSON.stringify({
+                ...startNode.data,
+                trigger: {
+                  ...trigger,
+                  thirdPartyTriggerId: dbTrigger.id,
+                },
+              }),
+            },
+          });
+
+          console.log('[API PUT] Start node updated with thirdPartyTriggerId');
+        } catch (error) {
+          console.error('[API PUT] Error creating/updating ThirdPartyTrigger:', error);
+          // Don't fail the whole flow save, just log the error
+        }
+      }
+    }
 
     // Return updated flow
     console.log('[API PUT] Fetching updated flow with steps and connections...');

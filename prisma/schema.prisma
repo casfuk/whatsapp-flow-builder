@@ -8,17 +8,18 @@ datasource db {
 }
 
 model Flow {
-  id          String           @id @default(cuid())
-  name        String
-  key         String           @unique
-  description String?
-  isActive    Boolean          @default(false)
-  startStepId String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  connections FlowConnection[]
-  steps       FlowStep[]
-  answers     FormAnswer[]
+  id                 String               @id @default(cuid())
+  name               String
+  key                String               @unique
+  description        String?
+  isActive           Boolean              @default(false)
+  startStepId        String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  connections        FlowConnection[]
+  steps              FlowStep[]
+  answers            FormAnswer[]
+  thirdPartyTriggers ThirdPartyTrigger[]
 
   @@index([key])
 }
@@ -96,16 +97,17 @@ model DebugAction {
 }
 
 model Device {
-  id                    String   @id @default(cuid())
+  id                    String               @id @default(cuid())
   name                  String
-  color                 String   @default("#6D5BFA")
+  color                 String               @default("#6D5BFA")
   whatsappPhoneNumberId String?
   phoneNumber           String?
-  isConnected           Boolean  @default(false)
+  isConnected           Boolean              @default(false)
   accessToken           String?
   businessAccountId     String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  thirdPartyTriggers    ThirdPartyTrigger[]
 
   @@index([isConnected])
 }
@@ -298,6 +300,25 @@ model MassSend {
   @@index([deviceId])
   @@index([status])
   @@index([scheduledAt])
+}
+
+model ThirdPartyTrigger {
+  id                 String    @id @default(cuid())
+  flowId             String
+  deviceId           String
+  type               String    @default("facebook_lead")
+  title              String?
+  fieldMapping       String    @default("{}")
+  lastReceivedAt     DateTime?
+  lastPayloadPreview String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  flow   Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([flowId])
+  @@index([deviceId])
 }
 
 model AiAgent {

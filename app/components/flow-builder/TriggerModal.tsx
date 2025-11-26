@@ -86,10 +86,17 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
     setSmartTrigger(false);
   };
 
-  // Mock user/trigger IDs for webhook URL
-  const userId = "5334";
-  const triggerId = trigger?.id || "088ec465-33fa-4";
-  const webhookUrl = `https://flows-api.funnelchat.app/api/v1/users/${userId}/triggers/${triggerId}...`;
+  // Third-party trigger state
+  const [thirdPartyTriggerId, setThirdPartyTriggerId] = useState<string | null>(
+    trigger?.type === "third_party" && (trigger as any).thirdPartyTriggerId
+      ? (trigger as any).thirdPartyTriggerId
+      : null
+  );
+
+  // Generate webhook URL if we have a third-party trigger ID
+  const webhookUrl = thirdPartyTriggerId
+    ? `${process.env.NEXT_PUBLIC_APP_URL || "https://flows-api.funnelchat.app"}/api/v1/integrations/${thirdPartyTriggerId}/webhook`
+    : "Guardando...";
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -114,7 +121,7 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
     setKeywordInput(filtered.join("\n"));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validation
     if (type === "tag_added") {
       if (!tagId || !deviceId) {
@@ -147,6 +154,14 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
       };
       onSave(newTrigger);
     } else if (type === "third_party") {
+      // Validate device is selected
+      if (!deviceId) {
+        alert("Por favor selecciona un dispositivo");
+        return;
+      }
+
+      // We need a flowId to create the trigger - we'll pass a placeholder
+      // and the parent component (FlowBuilder) will update it with the real flowId after saving
       const newTrigger: TriggerConfig = {
         id: trigger?.id || `trigger-${Date.now()}`,
         name: "",
@@ -155,7 +170,9 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
         webhookUrl,
         fields: [],
         oncePerContact,
-      };
+        thirdPartyTriggerId, // Pass the DB trigger ID if it exists
+      } as any;
+
       onSave(newTrigger);
     } else {
       const newTrigger: TriggerConfig = {
@@ -408,17 +425,21 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
 
                   {/* Webhook URL */}
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      URL del webhook
+                    </label>
                     <div className="relative">
                       <input
                         type="text"
                         value={webhookUrl}
                         readOnly
-                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 pr-10 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 pr-10 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
                       />
                       <button
                         onClick={handleCopyWebhook}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3"
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 hover:opacity-70 transition-opacity"
                         title="Copiar URL"
+                        disabled={!thirdPartyTriggerId}
                       >
                         <svg
                           className="w-4 h-4 text-gray-500"
@@ -430,13 +451,21 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 2 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
                           />
                         </svg>
                       </button>
                     </div>
-                    <p className="text-sm text-emerald-500 mt-2">
-                      En espera de datos…
+                    <p className="text-xs text-gray-600 mt-2 leading-relaxed">
+                      {thirdPartyTriggerId ? (
+                        <>
+                          Configura esta URL como webhook en tu Facebook Leads Center. Cada nuevo lead activará este flujo para el dispositivo seleccionado.
+                        </>
+                      ) : (
+                        <>
+                          Guarda el flujo primero para generar la URL del webhook.
+                        </>
+                      )}
                     </p>
                   </div>
 
