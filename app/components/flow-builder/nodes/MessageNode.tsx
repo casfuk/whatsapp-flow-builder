@@ -1,7 +1,7 @@
 "use client";
 
 import { Handle, Position, NodeProps } from "reactflow";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { NodeWrapper } from "../NodeWrapper";
 
@@ -64,6 +64,314 @@ type MessageNodeProps = {
   onDuplicate?: (nodeId: string) => void;
   onDelete?: (nodeId: string) => void;
 } & Partial<MessageNodeData>;
+
+// ============ TEXT EDITOR TOOLBAR COMPONENT ============
+
+type CustomField = {
+  id: string;
+  name: string;
+  key: string;
+};
+
+function TextEditorToolbar({
+  textareaRef,
+  value,
+  onChange,
+}: {
+  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  value: string;
+  onChange: (newValue: string) => void;
+}) {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showFieldPicker, setShowFieldPicker] = useState(false);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+
+  // Common emojis for quick access
+  const commonEmojis = [
+    "😊", "😂", "❤️", "👍", "🙏", "😍", "🎉", "🔥", "✨", "💪",
+    "👏", "🎊", "💯", "🚀", "⭐", "💼", "📱", "✅", "❌", "⚡",
+  ];
+
+  // Fetch custom fields on mount
+  useEffect(() => {
+    const fetchCustomFields = async () => {
+      try {
+        const response = await fetch("/api/custom-fields");
+        if (response.ok) {
+          const fields = await response.json();
+          setCustomFields(fields);
+        }
+      } catch (error) {
+        console.error("Failed to fetch custom fields:", error);
+      }
+    };
+
+    fetchCustomFields();
+  }, []);
+
+  // Insert text at cursor position
+  const insertAtCursor = (textToInsert: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = value.substring(0, start);
+    const after = value.substring(end);
+    const newValue = before + textToInsert + after;
+
+    onChange(newValue);
+
+    // Set cursor position after inserted text
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = start + textToInsert.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
+  // Apply formatting (bold, italic, strikethrough)
+  const applyFormatting = (type: "bold" | "italic" | "strike") => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = value.substring(start, end);
+
+    let marker = "";
+    if (type === "bold") marker = "*";
+    else if (type === "italic") marker = "_";
+    else if (type === "strike") marker = "~";
+
+    if (selectedText) {
+      // Wrap selected text
+      const wrappedText = `${marker}${selectedText}${marker}`;
+      const before = value.substring(0, start);
+      const after = value.substring(end);
+      const newValue = before + wrappedText + after;
+
+      onChange(newValue);
+
+      // Set selection to the wrapped text
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + marker.length, end + marker.length);
+      }, 0);
+    } else {
+      // No selection - insert markers and place cursor between them
+      const toInsert = `${marker}${marker}`;
+      insertAtCursor(toInsert);
+
+      // Move cursor between markers
+      setTimeout(() => {
+        textarea.focus();
+        const newPos = start + marker.length;
+        textarea.setSelectionRange(newPos, newPos);
+      }, 0);
+    }
+  };
+
+  // Insert field placeholder
+  const insertField = (fieldKey: string) => {
+    insertAtCursor(`{{${fieldKey}}}`);
+    setShowFieldPicker(false);
+  };
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-3">
+        {/* Emoji button */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowEmojiPicker(!showEmojiPicker);
+              setShowFieldPicker(false);
+            }}
+            className="text-base hover:opacity-70 transition-opacity text-gray-700"
+            title="Insertar emoji"
+          >
+            😊
+          </button>
+
+          {/* Emoji picker popover */}
+          {showEmojiPicker && (
+            <div
+              className="absolute z-50 top-8 left-0 bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-64"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-wrap gap-2">
+                {commonEmojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      insertAtCursor(emoji);
+                      setShowEmojiPicker(false);
+                    }}
+                    className="text-xl hover:bg-gray-100 rounded p-1 transition-colors"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowEmojiPicker(false);
+                  }}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bold button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            applyFormatting("bold");
+          }}
+          className="font-bold text-sm text-gray-700 hover:opacity-70 transition-opacity"
+          title="Negrita (*texto*)"
+        >
+          B
+        </button>
+
+        {/* Italic button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            applyFormatting("italic");
+          }}
+          className="italic text-sm text-gray-700 hover:opacity-70 transition-opacity"
+          title="Cursiva (_texto_)"
+        >
+          I
+        </button>
+
+        {/* Strikethrough button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            applyFormatting("strike");
+          }}
+          className="line-through text-sm text-gray-700 hover:opacity-70 transition-opacity"
+          title="Tachado (~texto~)"
+        >
+          S
+        </button>
+
+        {/* Field placeholder button */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowFieldPicker(!showFieldPicker);
+              setShowEmojiPicker(false);
+            }}
+            className="text-sm text-gray-700 hover:opacity-70 transition-opacity font-mono"
+            title="Insertar campo de contacto"
+          >
+            {"{}"}
+          </button>
+
+          {/* Field picker popover */}
+          {showFieldPicker && (
+            <div
+              className="absolute z-50 top-8 left-0 bg-white border border-gray-200 rounded-lg shadow-lg w-64 max-h-80 overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Standard fields */}
+              <div className="p-2 border-b border-gray-100">
+                <div className="text-xs font-semibold text-gray-500 uppercase px-2 py-1">
+                  Campos estándar
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    insertField("name");
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
+                >
+                  Nombre
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    insertField("phone");
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
+                >
+                  Teléfono
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    insertField("email");
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
+                >
+                  Email
+                </button>
+              </div>
+
+              {/* Custom fields */}
+              {customFields.length > 0 && (
+                <div className="p-2">
+                  <div className="text-xs font-semibold text-gray-500 uppercase px-2 py-1">
+                    Campos personalizados
+                  </div>
+                  {customFields.map((field) => (
+                    <button
+                      key={field.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        insertField(field.key);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
+                    >
+                      {field.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="p-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFieldPicker(false);
+                  }}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ============ DELAY CONTROL COMPONENT ============
 
@@ -238,6 +546,7 @@ function TextForm({
   delaySeconds: number;
 }) {
   const text = (data as TextMessageData).text ?? "";
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   return (
     <div className="flex flex-col gap-3 border-t border-[#E4E6F2] pt-3">
@@ -261,6 +570,7 @@ function TextForm({
 
       {/* Textarea */}
       <textarea
+        ref={textareaRef}
         placeholder="Escribe un mensaje…"
         value={text}
         onChange={(e) => updateData({ text: e.target.value })}
@@ -270,23 +580,11 @@ function TextForm({
       />
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2 text-sm">
-        <button type="button" className="hover:opacity-70" onClick={(e) => e.stopPropagation()}>
-          😊
-        </button>
-        <button type="button" className="hover:opacity-70 font-bold" onClick={(e) => e.stopPropagation()}>
-          B
-        </button>
-        <button type="button" className="hover:opacity-70 italic" onClick={(e) => e.stopPropagation()}>
-          I
-        </button>
-        <button type="button" className="hover:opacity-70 line-through" onClick={(e) => e.stopPropagation()}>
-          S
-        </button>
-        <button type="button" className="hover:opacity-70" onClick={(e) => e.stopPropagation()}>
-          {"{}"}
-        </button>
-      </div>
+      <TextEditorToolbar
+        textareaRef={textareaRef}
+        value={text}
+        onChange={(newValue) => updateData({ text: newValue })}
+      />
 
       {/* Delay Control (3-60) */}
       <DelayControl
@@ -317,6 +615,7 @@ function MediaForm({
   const fileUrl = (data as MediaMessageData).fileUrl ?? "";
   const caption = (data as MediaMessageData).caption ?? "";
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -377,6 +676,7 @@ function MediaForm({
 
       {/* Caption textarea */}
       <textarea
+        ref={captionTextareaRef}
         placeholder="Escribe un mensaje…"
         value={caption}
         onChange={(e) => updateData({ caption: e.target.value })}
@@ -386,23 +686,11 @@ function MediaForm({
       />
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2 text-sm">
-        <button type="button" className="hover:opacity-70" onClick={(e) => e.stopPropagation()}>
-          😊
-        </button>
-        <button type="button" className="hover:opacity-70 font-bold" onClick={(e) => e.stopPropagation()}>
-          B
-        </button>
-        <button type="button" className="hover:opacity-70 italic" onClick={(e) => e.stopPropagation()}>
-          I
-        </button>
-        <button type="button" className="hover:opacity-70 line-through" onClick={(e) => e.stopPropagation()}>
-          S
-        </button>
-        <button type="button" className="hover:opacity-70" onClick={(e) => e.stopPropagation()}>
-          {"{}"}
-        </button>
-      </div>
+      <TextEditorToolbar
+        textareaRef={captionTextareaRef}
+        value={caption}
+        onChange={(newValue) => updateData({ caption: newValue })}
+      />
 
       {/* Delay Control (5-60) */}
       <DelayControl
