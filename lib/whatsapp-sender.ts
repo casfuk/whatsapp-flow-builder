@@ -31,19 +31,39 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
   }));
 
   try {
-    // Get WhatsApp configuration from database
-    const config = await prisma.whatsAppConfig.findFirst({
+    // Get WhatsApp configuration from database, fallback to env vars
+    let config = await prisma.whatsAppConfig.findFirst({
       where: {
         mode: "cloud_api",
       },
     });
 
+    // Fallback to environment variables if DB config is missing
     if (!config || !config.accessToken || !config.phoneNumberId) {
-      console.error("[WhatsApp Sender] ERROR: WhatsApp Cloud API not configured");
-      console.error("[WhatsApp Sender] Config found:", !!config);
-      console.error("[WhatsApp Sender] Has accessToken:", !!config?.accessToken);
-      console.error("[WhatsApp Sender] Has phoneNumberId:", !!config?.phoneNumberId);
-      return false;
+      console.log("[WhatsApp Sender] Database config incomplete, using environment variables");
+
+      const envAccessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_CLOUD_API_TOKEN;
+      const envPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+      if (!envAccessToken || !envPhoneNumberId) {
+        console.error("[WhatsApp Sender] ERROR: WhatsApp Cloud API not configured");
+        console.error("[WhatsApp Sender] Config found:", !!config);
+        console.error("[WhatsApp Sender] ENV access token:", !!envAccessToken);
+        console.error("[WhatsApp Sender] ENV phone number ID:", !!envPhoneNumberId);
+        return false;
+      }
+
+      // Use env vars as config
+      config = {
+        id: "env-fallback",
+        mode: "cloud_api",
+        accessToken: envAccessToken,
+        phoneNumberId: envPhoneNumberId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any;
+
+      console.log("[WhatsApp Sender] ✅ Using environment variables as config");
     }
 
     console.log(`[WhatsApp Sender] Using phoneNumberId: ${config.phoneNumberId}`);

@@ -77,11 +77,11 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
     });
   }
 
-  // 3) Get WhatsApp config
+  // 3) Get WhatsApp config - try DB first, fallback to env vars
   console.log("[WhatsApp Config Debug] ========================================");
   console.log("[WhatsApp Config Debug] 🔍 CHECKING WHATSAPP CONFIGURATION");
 
-  const config = await prisma.whatsAppConfig.findFirst({
+  let config = await prisma.whatsAppConfig.findFirst({
     where: { mode: "cloud_api" },
   });
 
@@ -90,8 +90,6 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
     hasAccessToken: !!config?.accessToken,
     hasPhoneNumberId: !!config?.phoneNumberId,
     mode: config?.mode,
-    accessTokenLength: config?.accessToken?.length,
-    phoneNumberId: config?.phoneNumberId,
   });
 
   console.log("[WhatsApp Config Debug] Environment variables:", {
@@ -101,16 +99,39 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
     hasBusinessId: !!process.env.WHATSAPP_BUSINESS_ID,
     hasPhoneNumberId: !!process.env.WHATSAPP_PHONE_NUMBER_ID,
   });
-  console.log("[WhatsApp Config Debug] ========================================");
 
+  // Fallback to environment variables if DB config is missing
   if (!config || !config.accessToken || !config.phoneNumberId) {
-    console.error("[WhatsApp Config Debug] ❌ Database config is INCOMPLETE");
-    console.error("[WhatsApp Config Debug] Config object:", config);
-    console.error("[WhatsApp Message Service] WhatsApp Cloud API not configured");
-    throw new Error("WhatsApp Cloud API not configured");
+    console.log("[WhatsApp Config Debug] ⚠️ Database config incomplete, using environment variables");
+
+    const envAccessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_CLOUD_API_TOKEN;
+    const envPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+    if (!envAccessToken || !envPhoneNumberId) {
+      console.error("[WhatsApp Config Debug] ❌ Neither DB nor ENV vars are properly configured");
+      console.error("[WhatsApp Config Debug] ENV access token present:", !!envAccessToken);
+      console.error("[WhatsApp Config Debug] ENV phone number ID present:", !!envPhoneNumberId);
+      throw new Error("WhatsApp Cloud API not configured");
+    }
+
+    // Use env vars as config
+    config = {
+      id: "env-fallback",
+      mode: "cloud_api",
+      accessToken: envAccessToken,
+      phoneNumberId: envPhoneNumberId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any;
+
+    console.log("[WhatsApp Config Debug] ✅ Using environment variables as config");
+    console.log("[WhatsApp Config Debug] Phone Number ID:", envPhoneNumberId);
+  } else {
+    console.log("[WhatsApp Config Debug] ✅ Using database config");
+    console.log("[WhatsApp Config Debug] Phone Number ID:", config.phoneNumberId);
   }
 
-  console.log("[WhatsApp Config Debug] ✅ Database config is VALID");
+  console.log("[WhatsApp Config Debug] ========================================");
 
   // 4) Build request body
   const requestBody = {
