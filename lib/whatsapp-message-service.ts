@@ -78,14 +78,39 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
   }
 
   // 3) Get WhatsApp config
+  console.log("[WhatsApp Config Debug] ========================================");
+  console.log("[WhatsApp Config Debug] 🔍 CHECKING WHATSAPP CONFIGURATION");
+
   const config = await prisma.whatsAppConfig.findFirst({
     where: { mode: "cloud_api" },
   });
 
+  console.log("[WhatsApp Config Debug] Database config:", {
+    found: !!config,
+    hasAccessToken: !!config?.accessToken,
+    hasPhoneNumberId: !!config?.phoneNumberId,
+    mode: config?.mode,
+    accessTokenLength: config?.accessToken?.length,
+    phoneNumberId: config?.phoneNumberId,
+  });
+
+  console.log("[WhatsApp Config Debug] Environment variables:", {
+    hasVerifyToken: !!process.env.WHATSAPP_VERIFY_TOKEN,
+    hasAccessToken: !!process.env.WHATSAPP_ACCESS_TOKEN,
+    hasCloudApiToken: !!process.env.WHATSAPP_CLOUD_API_TOKEN,
+    hasBusinessId: !!process.env.WHATSAPP_BUSINESS_ID,
+    hasPhoneNumberId: !!process.env.WHATSAPP_PHONE_NUMBER_ID,
+  });
+  console.log("[WhatsApp Config Debug] ========================================");
+
   if (!config || !config.accessToken || !config.phoneNumberId) {
+    console.error("[WhatsApp Config Debug] ❌ Database config is INCOMPLETE");
+    console.error("[WhatsApp Config Debug] Config object:", config);
     console.error("[WhatsApp Message Service] WhatsApp Cloud API not configured");
     throw new Error("WhatsApp Cloud API not configured");
   }
+
+  console.log("[WhatsApp Config Debug] ✅ Database config is VALID");
 
   // 4) Build request body
   const requestBody = {
