@@ -196,6 +196,16 @@ export async function POST(
     }
 
     // 7. Start the flow for this contact
+    console.log(`[Third-Party Webhook] ========================================`);
+    console.log(`[Third-Party Webhook] 🚀 STARTING FLOW EXECUTION`);
+    console.log(`[Third-Party Webhook] Flow ID: ${trigger.flowId}`);
+    console.log(`[Third-Party Webhook] Device ID: ${trigger.deviceId}`);
+    console.log(`[Third-Party Webhook] Contact ID: ${contact.id}`);
+    console.log(`[Third-Party Webhook] Phone: ${contact.phone}`);
+    console.log(`[Third-Party Webhook] Contact Name: ${contact.name || "Lead"}`);
+    console.log(`[Third-Party Webhook] Flow is active: ${trigger.flow.isActive}`);
+    console.log(`[Third-Party Webhook] ========================================`);
+
     await executeFlowForContact({
       flowId: trigger.flowId,
       deviceId: trigger.deviceId,
@@ -317,13 +327,19 @@ async function executeFlowForContact({
     // Process actions
     for (let i = 0; i < actions.length; i++) {
       const action = actions[i];
+      console.log(`[Flow Execution] ----------------------------------------`);
       console.log(`[Flow Execution] Processing action ${i + 1}/${actions.length}: ${action.type}`);
+      console.log(`[Flow Execution] Action data:`, JSON.stringify(action, null, 2));
 
       if (action.type === "send_whatsapp") {
-        console.log(`[Flow Execution]   → send_whatsapp to ${action.to}`);
+        console.log(`[Flow Execution]   → 📱 SENDING WHATSAPP MESSAGE`);
+        console.log(`[Flow Execution]   → To: ${action.to}`);
         console.log(`[Flow Execution]   → Text: "${action.text}"`);
+        console.log(`[Flow Execution]   → Device ID: ${deviceId}`);
 
         try {
+          console.log(`[Flow Execution]   → Calling sendAndPersistMessage...`);
+
           await sendAndPersistMessage({
             deviceId,
             toPhoneNumber: action.to,
@@ -332,6 +348,8 @@ async function executeFlowForContact({
             sender: "flow",
             textPreview: action.text,
           });
+
+          console.log(`[Flow Execution]   → ✓ sendAndPersistMessage completed`);
 
           // Also log to messageLog for backwards compatibility
           await prisma.messageLog.create({
@@ -342,9 +360,11 @@ async function executeFlowForContact({
             },
           });
 
-          console.log(`[Flow Execution]   ✓ Message sent and persisted`);
-        } catch (err) {
-          console.error(`[Flow Execution]   ✗ Error sending message:`, err);
+          console.log(`[Flow Execution]   ✓ Message sent and persisted successfully`);
+        } catch (err: any) {
+          console.error(`[Flow Execution]   ✗ ERROR sending message:`, err);
+          console.error(`[Flow Execution]   ✗ Error message:`, err.message);
+          console.error(`[Flow Execution]   ✗ Error stack:`, err.stack);
         }
       } else if (action.type === "send_whatsapp_interactive") {
         console.log(`[Flow Execution]   → send_whatsapp_interactive`);

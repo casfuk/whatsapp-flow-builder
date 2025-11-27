@@ -34,12 +34,28 @@ export class RuntimeEngine {
   }
 
   async executeFromStep(startStepId: string): Promise<Action[]> {
+    console.log(`[RuntimeEngine] ========================================`);
+    console.log(`[RuntimeEngine] 🚀 STARTING FLOW EXECUTION`);
+    console.log(`[RuntimeEngine] Flow ID: ${this.flow.id}`);
+    console.log(`[RuntimeEngine] Flow Name: ${this.flow.name}`);
+    console.log(`[RuntimeEngine] Session ID: ${this.context.sessionId}`);
+    console.log(`[RuntimeEngine] Start Step ID: ${startStepId}`);
+    console.log(`[RuntimeEngine] Variables:`, this.context.variables);
+    console.log(`[RuntimeEngine] Total steps in flow: ${this.steps.size}`);
+    console.log(`[RuntimeEngine] ========================================`);
+
     const allActions: Action[] = [];
     let currentStepId: string | null = startStepId;
 
     while (currentStepId) {
       const step = this.steps.get(currentStepId);
-      if (!step) break;
+      if (!step) {
+        console.error(`[RuntimeEngine] ❌ Step not found: ${currentStepId}`);
+        break;
+      }
+
+      console.log(`[RuntimeEngine] → Executing step: ${step.type} (${step.id})`);
+      console.log(`[RuntimeEngine] → Step label: ${step.label}`);
 
       // Save current step to session state
       await this.saveSessionState(currentStepId);
