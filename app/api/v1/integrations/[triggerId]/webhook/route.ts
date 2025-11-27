@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
+import { normalizePhoneNumber } from "@/lib/phone-utils";
 
 /**
  * Webhook endpoint for third-party integrations (Facebook Leads, etc.)
@@ -49,6 +50,7 @@ export async function POST(
     // 2. Read webhook payload
     const payload = await request.json();
     console.log(`[Third-Party Webhook] Payload received:`, JSON.stringify(payload, null, 2));
+    console.log(`[Third-Party Webhook] Payload keys:`, Object.keys(payload));
 
     // 3. Extract contact data from payload using field mapping
     let fullName = null;
@@ -103,6 +105,10 @@ export async function POST(
       );
     }
 
+    // Normalize phone number for consistent storage
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    console.log(`[Third-Party Webhook] Phone normalized: ${phoneNumber} -> ${normalizedPhone}`);
+
     // 4. Create or update contact
     const createMetadata = {
       triggerId: trigger.id,
@@ -123,12 +129,12 @@ export async function POST(
     const contact = await prisma.contact.upsert({
       where: {
         phone_device: {
-          phone: phoneNumber,
+          phone: normalizedPhone,
           deviceId: trigger.deviceId,
         },
       },
       create: {
-        phone: phoneNumber,
+        phone: normalizedPhone,
         name: fullName,
         email: email,
         deviceId: trigger.deviceId,
@@ -147,15 +153,22 @@ export async function POST(
     console.log(`[Third-Party Webhook] Contact phone: ${contact.phone}, name: ${contact.name || "N/A"}`);
 
     // 5. Update trigger with last received data
-    await prisma.thirdPartyTrigger.update({
+    console.log(`[Third-Party Webhook] Updating trigger ${trigger.id} with payload...`);
+    console.log(`[Third-Party Webhook] Payload to save:`, payload);
+    console.log(`[Third-Party Webhook] Payload keys to save:`, Object.keys(payload));
+
+    const updatedTrigger = await prisma.thirdPartyTrigger.update({
       where: { id: trigger.id },
       data: {
         lastReceivedAt: new Date(),
         lastPayloadPreview: JSON.stringify(payload).substring(0, 500),
+        lastPayloadSample: payload,
       },
     });
 
-    console.log(`[Third-Party Webhook] Trigger updated with last received data`);
+    console.log(`[Third-Party Webhook] ✓ Trigger updated successfully`);
+    console.log(`[Third-Party Webhook] Saved lastPayloadSample keys:`,
+      updatedTrigger.lastPayloadSample ? Object.keys(updatedTrigger.lastPayloadSample as any) : 'null');
 
     // 6. Check if runOncePerContact is enabled and contact already triggered
     if (trigger.runOncePerContact) {

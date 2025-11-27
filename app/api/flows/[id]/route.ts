@@ -64,6 +64,7 @@ export async function GET(
         if (dbTrigger) {
           console.log('[API GET] Found ThirdPartyTrigger:', dbTrigger.id);
           (startNode.data as any).trigger.thirdPartyTriggerId = dbTrigger.id;
+
           // Parse and include field mappings
           try {
             const fieldMappings = JSON.parse(dbTrigger.fieldMapping);
@@ -72,6 +73,17 @@ export async function GET(
             console.error('[API GET] Error parsing fieldMapping:', error);
             (startNode.data as any).trigger.fieldMappings = [];
           }
+
+          // Extract available source fields from lastPayloadSample
+          const sample = dbTrigger.lastPayloadSample as Record<string, any> | null;
+          console.log('[API GET] lastPayloadSample:', sample);
+          console.log('[API GET] lastPayloadSample type:', typeof sample);
+          const availableSourceFields = sample ? Object.keys(sample) : [];
+          (startNode.data as any).trigger.availableSourceFields = availableSourceFields;
+          (startNode.data as any).trigger.lastReceivedAt = dbTrigger.lastReceivedAt;
+
+          console.log('[API GET] Available source fields:', availableSourceFields);
+          console.log('[API GET] Last received at:', dbTrigger.lastReceivedAt);
         }
       } catch (error) {
         console.error('[API GET] Error loading ThirdPartyTrigger:', error);
@@ -119,9 +131,12 @@ export async function GET(
       return node;
     });
 
+    // Exclude raw steps and connections from response to avoid duplicates
+    const { steps, connections, ...flowWithoutRawData } = flow;
+
     // Return flow with converted nodes and edges
     return NextResponse.json({
-      ...flow,
+      ...flowWithoutRawData,
       nodes: migratedNodes,
       edges,
     });
@@ -228,6 +243,9 @@ export async function PUT(
       console.log('[API PUT] Deleted existing steps and connections');
 
       // Create new steps from nodes
+      // Don't reuse frontend node IDs - let Prisma generate new unique IDs
+      const nodeIdToStepIdMap = new Map<string, string>();
+
       if (nodes && nodes.length > 0) {
         // Migration: Fix multipleChoice nodes to have options for all their connections
         console.log('[API PUT] Running multipleChoice migration...');
@@ -285,29 +303,35 @@ export async function PUT(
           });
         });
 
-        const stepsData = migratedNodes.map((node: any) => ({
-          id: node.id,
-          flowId: id,
-          type: node.type || "default",
-          label: node.data.label || node.type || "Step",
-          configJson: JSON.stringify(node.data),
-          positionX: Math.round(node.position.x),
-          positionY: Math.round(node.position.y),
-        }));
-
-        console.log('[API PUT] Creating', stepsData.length, 'steps...');
-        await tx.flowStep.createMany({ data: stepsData });
+        // Create steps one by one to get their generated IDs and build mapping
+        console.log('[API PUT] Creating', migratedNodes.length, 'steps...');
+        for (const node of migratedNodes) {
+          const createdStep = await tx.flowStep.create({
+            data: {
+              flowId: id,
+              type: node.type || "default",
+              label: node.data.label || node.type || "Step",
+              configJson: JSON.stringify({
+                ...node.data,
+                _nodeId: node.id // Store frontend node ID for reference
+              }),
+              positionX: Math.round(node.position.x),
+              positionY: Math.round(node.position.y),
+            },
+          });
+          nodeIdToStepIdMap.set(node.id, createdStep.id);
+        }
         console.log('[API PUT] Steps created successfully');
       }
 
-      // Create new connections from edges
+      // Create new connections from edges using the mapped database IDs
       if (edges && edges.length > 0) {
         console.log('[API PUT] Creating', edges.length, 'connections...');
         await tx.flowConnection.createMany({
           data: edges.map((edge: any) => ({
             flowId: id,
-            fromStepId: edge.source,
-            toStepId: edge.target,
+            fromStepId: nodeIdToStepIdMap.get(edge.source) || edge.source,
+            toStepId: nodeIdToStepIdMap.get(edge.target) || edge.target,
             conditionLabel: edge.label || null,
             sourceHandle: edge.sourceHandle || null,
           })),
@@ -368,21 +392,32 @@ export async function PUT(
 
           console.log('[API PUT] ThirdPartyTrigger saved:', dbTrigger.id);
 
-          // Update the start node in the database to include the triggerId
-          await prisma.flowStep.update({
-            where: { id: startNode.id },
-            data: {
-              configJson: JSON.stringify({
-                ...startNode.data,
-                trigger: {
-                  ...trigger,
-                  thirdPartyTriggerId: dbTrigger.id,
-                },
-              }),
+          // Find the created start step in the database
+          const startStep = await prisma.flowStep.findFirst({
+            where: {
+              flowId: id,
+              type: 'start',
             },
           });
 
-          console.log('[API PUT] Start node updated with thirdPartyTriggerId');
+          if (startStep) {
+            // Update the start node in the database to include the triggerId
+            await prisma.flowStep.update({
+              where: { id: startStep.id },
+              data: {
+                configJson: JSON.stringify({
+                  ...startNode.data,
+                  _nodeId: startNode.id,
+                  trigger: {
+                    ...trigger,
+                    thirdPartyTriggerId: dbTrigger.id,
+                  },
+                }),
+              },
+            });
+
+            console.log('[API PUT] Start node updated with thirdPartyTriggerId');
+          }
         } catch (error) {
           console.error('[API PUT] Error creating/updating ThirdPartyTrigger:', error);
           // Don't fail the whole flow save, just log the error
@@ -441,8 +476,11 @@ export async function PUT(
 
     console.log('[API PUT] Returning response with', savedNodes.length, 'nodes and', savedEdges.length, 'edges');
 
+    // Exclude raw steps and connections from response to avoid duplicates
+    const { steps, connections, ...flowWithoutRawData } = fullFlow;
+
     return NextResponse.json({
-      ...fullFlow,
+      ...flowWithoutRawData,
       nodes: savedNodes,
       edges: savedEdges,
     });
