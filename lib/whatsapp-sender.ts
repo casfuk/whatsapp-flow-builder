@@ -66,6 +66,12 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
       console.log("[WhatsApp Sender] ✅ Using environment variables as config");
     }
 
+    // Final validation
+    if (!config || !config.accessToken || !config.phoneNumberId) {
+      console.error("[WhatsApp Sender] ERROR: Config validation failed after fallback");
+      return false;
+    }
+
     console.log(`[WhatsApp Sender] Using phoneNumberId: ${config.phoneNumberId}`);
 
     // Format phone number (remove + and spaces)
