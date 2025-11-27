@@ -133,6 +133,11 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
 
   console.log("[WhatsApp Config Debug] ========================================");
 
+  // Final validation - this should never happen after fallback logic
+  if (!config) {
+    throw new Error("WhatsApp configuration error: config is null after fallback");
+  }
+
   // 4) Build request body
   const requestBody = {
     messaging_product: "whatsapp",
