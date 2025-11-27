@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
       });
 
       // Create steps from nodes
+      // Don't use frontend node IDs as database IDs - let Prisma generate unique ones
+      const nodeIdToStepIdMap = new Map<string, string>();
+
       if (nodes && nodes.length > 0) {
         // Debug logging for question nodes
         nodes.forEach((node: any) => {
@@ -59,26 +62,32 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        await tx.flowStep.createMany({
-          data: nodes.map((node: any) => ({
-            id: node.id,
-            flowId: newFlow.id,
-            type: node.type || "default",
-            label: node.data.label || node.type || "Step",
-            configJson: JSON.stringify(node.data),
-            positionX: Math.round(node.position.x),
-            positionY: Math.round(node.position.y),
-          })),
-        });
+        // Create steps one by one to get their generated IDs and build mapping
+        for (const node of nodes) {
+          const createdStep = await tx.flowStep.create({
+            data: {
+              flowId: newFlow.id,
+              type: node.type || "default",
+              label: node.data.label || node.type || "Step",
+              configJson: JSON.stringify({
+                ...node.data,
+                _nodeId: node.id // Store frontend node ID for reference
+              }),
+              positionX: Math.round(node.position.x),
+              positionY: Math.round(node.position.y),
+            },
+          });
+          nodeIdToStepIdMap.set(node.id, createdStep.id);
+        }
       }
 
-      // Create connections from edges
+      // Create connections from edges using the mapped database IDs
       if (edges && edges.length > 0) {
         await tx.flowConnection.createMany({
           data: edges.map((edge: any) => ({
             flowId: newFlow.id,
-            fromStepId: edge.source,
-            toStepId: edge.target,
+            fromStepId: nodeIdToStepIdMap.get(edge.source) || edge.source,
+            toStepId: nodeIdToStepIdMap.get(edge.target) || edge.target,
             conditionLabel: edge.label || null,
             sourceHandle: edge.sourceHandle || null,
           })),
@@ -116,21 +125,32 @@ export async function POST(request: NextRequest) {
 
           console.log('[Flow POST] ThirdPartyTrigger created:', dbTrigger.id);
 
-          // Update the start node to include the triggerId
-          await prisma.flowStep.update({
-            where: { id: startNode.id },
-            data: {
-              configJson: JSON.stringify({
-                ...startNode.data,
-                trigger: {
-                  ...trigger,
-                  thirdPartyTriggerId: dbTrigger.id,
-                },
-              }),
+          // Find the created start step in the database
+          const startStep = await prisma.flowStep.findFirst({
+            where: {
+              flowId: flow.id,
+              type: 'start',
             },
           });
 
-          console.log('[Flow POST] Start node updated with thirdPartyTriggerId');
+          if (startStep) {
+            // Update the start node to include the triggerId
+            await prisma.flowStep.update({
+              where: { id: startStep.id },
+              data: {
+                configJson: JSON.stringify({
+                  ...startNode.data,
+                  _nodeId: startNode.id,
+                  trigger: {
+                    ...trigger,
+                    thirdPartyTriggerId: dbTrigger.id,
+                  },
+                }),
+              },
+            });
+
+            console.log('[Flow POST] Start node updated with thirdPartyTriggerId');
+          }
         } catch (error) {
           console.error('[Flow POST] Error creating ThirdPartyTrigger:', error);
         }
@@ -175,9 +195,12 @@ export async function POST(request: NextRequest) {
       sourceHandle: conn.sourceHandle || undefined,
     }));
 
+    // Exclude raw steps and connections from response to avoid duplicates
+    const { steps, connections, ...flowWithoutRawData } = fullFlow!;
+
     return NextResponse.json(
       {
-        ...fullFlow,
+        ...flowWithoutRawData,
         nodes: savedNodes,
         edges: savedEdges,
       },

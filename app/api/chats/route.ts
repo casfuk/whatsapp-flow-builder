@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Chat } from "@/app/types/chat";
+import { normalizePhoneNumber } from "@/lib/phone-utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -65,8 +66,21 @@ export async function GET(request: NextRequest) {
       orderBy: { lastMessageAt: "desc" },
     });
 
+    // Deduplicate chats: for same (phoneNumber, deviceId), keep only the most recent
+    const chatMap = new Map<string, typeof chats[0]>();
+    for (const chat of chats) {
+      const key = `${chat.phoneNumber}:${chat.deviceId}`;
+      const existing = chatMap.get(key);
+      if (!existing || chat.lastMessageAt > existing.lastMessageAt) {
+        chatMap.set(key, chat);
+      }
+    }
+    const deduplicatedChats = Array.from(chatMap.values());
+
+    console.log(`[Chats GET] Fetched ${chats.length} chats, deduplicated to ${deduplicatedChats.length}`);
+
     // Parse tags from JSON and format response
-    const formattedChats: Chat[] = chats.map((chat) => ({
+    const formattedChats: Chat[] = deduplicatedChats.map((chat) => ({
       id: chat.id,
       contactName: chat.contactName,
       phoneNumber: chat.phoneNumber,
@@ -108,14 +122,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { deviceId, phoneNumber } = body;
+    const { deviceId, phoneNumber: rawPhone } = body;
 
-    if (!deviceId || !phoneNumber) {
+    if (!deviceId || !rawPhone) {
       return NextResponse.json(
         { error: "deviceId and phoneNumber are required" },
         { status: 400 }
       );
     }
+
+    // Normalize phone number for consistent storage
+    const phoneNumber = normalizePhoneNumber(rawPhone);
+    console.log(`[Chat POST] Phone normalized: ${rawPhone} -> ${phoneNumber}`);
 
     // Validate device exists
     const device = await prisma.device.findUnique({
@@ -141,7 +159,7 @@ export async function POST(request: NextRequest) {
 
     // If chat doesn't exist, create it
     if (!chat) {
-      // Try to get contact name from Contact model
+      // Try to get contact name from Contact model (using normalized phone)
       const contact = await prisma.contact.findFirst({
         where: { phone: phoneNumber, deviceId },
       });

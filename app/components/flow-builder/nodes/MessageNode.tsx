@@ -179,10 +179,10 @@ function TextEditorToolbar({
   };
 
   return (
-    <div className="relative">
-      <div className="flex items-center gap-3">
+    <div className="nodrag relative">
+      <div className="nodrag flex items-center gap-3">
         {/* Emoji button */}
-        <div className="relative">
+        <div className="nodrag relative">
           <button
             type="button"
             onClick={(e) => {
@@ -190,7 +190,8 @@ function TextEditorToolbar({
               setShowEmojiPicker(!showEmojiPicker);
               setShowFieldPicker(false);
             }}
-            className="text-base hover:opacity-70 transition-opacity text-gray-700"
+            onMouseDown={(e) => e.stopPropagation()}
+            className="nodrag text-base hover:opacity-70 transition-opacity text-gray-700"
             title="Insertar emoji"
           >
             😊
@@ -199,10 +200,11 @@ function TextEditorToolbar({
           {/* Emoji picker popover */}
           {showEmojiPicker && (
             <div
-              className="absolute z-50 top-8 left-0 bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-64"
+              className="nodrag absolute z-50 top-8 left-0 bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-64"
               onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <div className="flex flex-wrap gap-2">
+              <div className="nodrag flex flex-wrap gap-2">
                 {commonEmojis.map((emoji) => (
                   <button
                     key={emoji}
@@ -212,20 +214,22 @@ function TextEditorToolbar({
                       insertAtCursor(emoji);
                       setShowEmojiPicker(false);
                     }}
-                    className="text-xl hover:bg-gray-100 rounded p-1 transition-colors"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="nodrag text-xl hover:bg-gray-100 rounded p-1 transition-colors"
                   >
                     {emoji}
                   </button>
                 ))}
               </div>
-              <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="nodrag mt-2 pt-2 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowEmojiPicker(false);
                   }}
-                  className="text-xs text-gray-500 hover:text-gray-700"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="nodrag text-xs text-gray-500 hover:text-gray-700"
                 >
                   Cerrar
                 </button>
@@ -241,7 +245,8 @@ function TextEditorToolbar({
             e.stopPropagation();
             applyFormatting("bold");
           }}
-          className="font-bold text-sm text-gray-700 hover:opacity-70 transition-opacity"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="nodrag font-bold text-sm text-gray-700 hover:opacity-70 transition-opacity"
           title="Negrita (*texto*)"
         >
           B
@@ -254,7 +259,8 @@ function TextEditorToolbar({
             e.stopPropagation();
             applyFormatting("italic");
           }}
-          className="italic text-sm text-gray-700 hover:opacity-70 transition-opacity"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="nodrag italic text-sm text-gray-700 hover:opacity-70 transition-opacity"
           title="Cursiva (_texto_)"
         >
           I
@@ -267,14 +273,15 @@ function TextEditorToolbar({
             e.stopPropagation();
             applyFormatting("strike");
           }}
-          className="line-through text-sm text-gray-700 hover:opacity-70 transition-opacity"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="nodrag line-through text-sm text-gray-700 hover:opacity-70 transition-opacity"
           title="Tachado (~texto~)"
         >
           S
         </button>
 
         {/* Field placeholder button */}
-        <div className="relative">
+        <div className="nodrag relative">
           <button
             type="button"
             onClick={(e) => {
@@ -282,7 +289,8 @@ function TextEditorToolbar({
               setShowFieldPicker(!showFieldPicker);
               setShowEmojiPicker(false);
             }}
-            className="text-sm text-gray-700 hover:opacity-70 transition-opacity font-mono"
+            onMouseDown={(e) => e.stopPropagation()}
+            className="nodrag text-sm text-gray-700 hover:opacity-70 transition-opacity font-mono"
             title="Insertar campo de contacto"
           >
             {"{}"}
@@ -291,12 +299,13 @@ function TextEditorToolbar({
           {/* Field picker popover */}
           {showFieldPicker && (
             <div
-              className="absolute z-50 top-8 left-0 bg-white border border-gray-200 rounded-lg shadow-lg w-64 max-h-80 overflow-y-auto"
+              className="nodrag absolute z-50 top-8 left-0 bg-white border border-gray-200 rounded-lg shadow-lg w-64 max-h-80 overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
             >
               {/* Standard fields */}
-              <div className="p-2 border-b border-gray-100">
-                <div className="text-xs font-semibold text-gray-500 uppercase px-2 py-1">
+              <div className="nodrag p-2 border-b border-gray-100">
+                <div className="nodrag text-xs font-semibold text-gray-500 uppercase px-2 py-1">
                   Campos estándar
                 </div>
                 <button
@@ -305,7 +314,8 @@ function TextEditorToolbar({
                     e.stopPropagation();
                     insertField("name");
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="nodrag w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
                 >
                   Nombre
                 </button>
@@ -315,7 +325,8 @@ function TextEditorToolbar({
                     e.stopPropagation();
                     insertField("phone");
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="nodrag w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
                 >
                   Teléfono
                 </button>
@@ -325,7 +336,8 @@ function TextEditorToolbar({
                     e.stopPropagation();
                     insertField("email");
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="nodrag w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
                 >
                   Email
                 </button>
@@ -333,8 +345,8 @@ function TextEditorToolbar({
 
               {/* Custom fields */}
               {customFields.length > 0 && (
-                <div className="p-2">
-                  <div className="text-xs font-semibold text-gray-500 uppercase px-2 py-1">
+                <div className="nodrag p-2">
+                  <div className="nodrag text-xs font-semibold text-gray-500 uppercase px-2 py-1">
                     Campos personalizados
                   </div>
                   {customFields.map((field) => (
@@ -345,7 +357,8 @@ function TextEditorToolbar({
                         e.stopPropagation();
                         insertField(field.key);
                       }}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className="nodrag w-full text-left px-3 py-2 hover:bg-gray-50 rounded text-sm text-gray-700 transition-colors"
                     >
                       {field.name}
                     </button>
@@ -353,14 +366,15 @@ function TextEditorToolbar({
                 </div>
               )}
 
-              <div className="p-2 border-t border-gray-100">
+              <div className="nodrag p-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowFieldPicker(false);
                   }}
-                  className="text-xs text-gray-500 hover:text-gray-700 px-2"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="nodrag text-xs text-gray-500 hover:text-gray-700 px-2"
                 >
                   Cerrar
                 </button>
@@ -576,7 +590,7 @@ function TextForm({
         onChange={(e) => updateData({ text: e.target.value })}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
-        className="w-full min-h-[100px] rounded-md border border-[#D2D4E4] bg-white px-3 py-2 text-xs placeholder:text-[#B0B3C6] text-[#373955] focus:outline-none focus:ring-2 focus:ring-[#5B5FEF] resize-none"
+        className="nodrag w-full min-h-[100px] rounded-md border border-[#D2D4E4] bg-white px-3 py-2 text-xs placeholder:text-[#B0B3C6] text-[#373955] focus:outline-none focus:ring-2 focus:ring-[#5B5FEF] resize-none"
       />
 
       {/* Toolbar */}
@@ -682,7 +696,7 @@ function MediaForm({
         onChange={(e) => updateData({ caption: e.target.value })}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
-        className="w-full min-h-[80px] rounded-md border border-[#D2D4E4] bg-white px-3 py-2 text-xs placeholder:text-[#B0B3C6] text-[#373955] focus:outline-none focus:ring-2 focus:ring-[#5B5FEF] resize-none"
+        className="nodrag w-full min-h-[80px] rounded-md border border-[#D2D4E4] bg-white px-3 py-2 text-xs placeholder:text-[#B0B3C6] text-[#373955] focus:outline-none focus:ring-2 focus:ring-[#5B5FEF] resize-none"
       />
 
       {/* Toolbar */}

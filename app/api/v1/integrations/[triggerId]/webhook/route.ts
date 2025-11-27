@@ -450,6 +450,126 @@ async function executeFlowForContact({
         } catch (err: any) {
           console.error(`[Flow Execution]   ✗ Error sending media:`, err);
         }
+      } else if (action.type === "assign_conversation") {
+        console.log(`[Flow Execution]   → 👤 ASSIGNING CONVERSATION`);
+        console.log(`[Flow Execution]   → Assignee ID: ${action.assigneeId}`);
+        console.log(`[Flow Execution]   → Session ID: ${action.sessionId}`);
+
+        try {
+          // Get the chat for this contact
+          const chat = await prisma.chat.findFirst({
+            where: {
+              phoneNumber: contact.phone,
+              deviceId,
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+          if (!chat) {
+            console.error(`[Flow Execution]   ✗ No chat found for contact ${contact.phone}`);
+            continue;
+          }
+
+          // Check if assignee is an AI agent
+          const aiAgent = await prisma.aiAgent.findUnique({
+            where: { id: action.assigneeId },
+          });
+
+          if (aiAgent) {
+            console.log(`[Flow Execution]   → Assigning to AI Agent: ${aiAgent.name}`);
+
+            // Update chat to be assigned to AI agent
+            await prisma.chat.update({
+              where: { id: chat.id },
+              data: {
+                assignedAgentType: "AI",
+                assignedAgentId: aiAgent.id,
+              },
+            });
+
+            console.log(`[Flow Execution]   ✓ Chat ${chat.id} assigned to AI agent ${aiAgent.name}`);
+
+            // Trigger initial AI greeting
+            console.log(`[Flow Execution]   → Triggering initial AI greeting...`);
+
+            try {
+              // Get recent messages for context
+              const recentMessages = await prisma.message.findMany({
+                where: { chatId: chat.id },
+                orderBy: { createdAt: "desc" },
+                take: 5,
+              });
+
+              // Build conversation context
+              const conversationContext = recentMessages
+                .reverse()
+                .map((msg) => ({
+                  role: msg.sender === "contact" ? "user" : "assistant",
+                  content: msg.text || "",
+                }));
+
+              // Add system instruction to start the conversation
+              const initialPrompt = [
+                {
+                  role: "system",
+                  content: `${aiAgent.systemPrompt}\n\nYou are now starting a conversation with a new user. Introduce yourself warmly and begin with your first question or greeting.`,
+                },
+                ...conversationContext,
+              ];
+
+              // Call AI endpoint to generate response
+              const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/ai-agents`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  agentId: aiAgent.id,
+                  messages: initialPrompt,
+                }),
+              });
+
+              if (!aiResponse.ok) {
+                throw new Error(`AI API returned ${aiResponse.status}`);
+              }
+
+              const aiData = await aiResponse.json();
+              const aiMessage = aiData.message || aiData.response || "Hola, ¿cómo puedo ayudarte?";
+
+              console.log(`[Flow Execution]   → AI generated greeting: "${aiMessage.substring(0, 100)}..."`);
+
+              // Send AI greeting via WhatsApp
+              await sendAndPersistMessage({
+                deviceId,
+                toPhoneNumber: contact.phone,
+                type: "text",
+                payload: { text: { body: aiMessage } },
+                sender: "agent",
+                textPreview: aiMessage,
+                chatId: chat.id,
+              });
+
+              console.log(`[Flow Execution]   ✓ AI greeting sent successfully`);
+            } catch (aiError: any) {
+              console.error(`[Flow Execution]   ✗ Error generating/sending AI greeting:`, aiError);
+              console.error(`[Flow Execution]   ✗ AI Error message:`, aiError.message);
+            }
+          } else {
+            // Regular human agent assignment
+            console.log(`[Flow Execution]   → Assigning to human agent: ${action.assigneeId}`);
+
+            await prisma.chat.update({
+              where: { id: chat.id },
+              data: {
+                assignedAgentType: "HUMAN",
+                assignedAgentId: action.assigneeId,
+              },
+            });
+
+            console.log(`[Flow Execution]   ✓ Chat ${chat.id} assigned to human agent`);
+          }
+        } catch (err: any) {
+          console.error(`[Flow Execution]   ✗ Error assigning conversation:`, err);
+          console.error(`[Flow Execution]   ✗ Error message:`, err.message);
+        }
       } else {
         console.log(`[Flow Execution]   → Action type: ${action.type} (no handler)`);
       }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizePhoneNumber } from "@/lib/phone-utils";
 
 // GET single contact
 export async function GET(
@@ -60,6 +61,78 @@ export async function GET(
     console.error("Failed to fetch contact:", error);
     return NextResponse.json(
       { error: "Failed to fetch contact" },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT update contact (used by frontend edit modal)
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const { name, phoneNumber, email } = body;
+
+    // Build update object
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+
+    // Handle phone number update with normalization
+    if (phoneNumber !== undefined && phoneNumber !== null && phoneNumber.trim() !== "") {
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+      // Check if phone is being changed
+      const currentContact = await prisma.contact.findUnique({
+        where: { id },
+        select: { phone: true, deviceId: true },
+      });
+
+      if (currentContact && currentContact.phone !== normalizedPhone) {
+        // Phone is changing - check for conflicts with unique constraint
+        const conflictingContact = await prisma.contact.findUnique({
+          where: {
+            phone_device: {
+              phone: normalizedPhone,
+              deviceId: currentContact.deviceId || "",
+            },
+          },
+        });
+
+        if (conflictingContact && conflictingContact.id !== id) {
+          return NextResponse.json(
+            { error: "Ya existe un contacto con este número de teléfono en este dispositivo" },
+            { status: 409 }
+          );
+        }
+
+        updateData.phone = normalizedPhone;
+      }
+    }
+
+    // Update contact
+    const updatedContact = await prisma.contact.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return NextResponse.json(updatedContact);
+  } catch (error: any) {
+    console.error("Failed to update contact:", error);
+
+    // Handle unique constraint violation
+    if (error.code === "P2002") {
+      return NextResponse.json(
+        { error: "Ya existe un contacto con este número de teléfono" },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Failed to update contact" },
       { status: 500 }
     );
   }

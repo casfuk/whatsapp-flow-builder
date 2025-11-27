@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { SidebarLayout } from "@/app/components/SidebarLayout";
 import { useGlobal } from "../providers/GlobalProvider";
 
@@ -25,6 +26,7 @@ const SOURCE_LABELS = {
 };
 
 export default function ContactosPage() {
+  const router = useRouter();
   const { contacts: globalContacts, setContacts: setGlobalContacts, addContact: addGlobalContact } = useGlobal();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,10 +49,24 @@ export default function ContactosPage() {
     phoneNumber: "",
     email: "",
   });
+  const [showGlobalStoreBanner, setShowGlobalStoreBanner] = useState(false);
 
   useEffect(() => {
     fetchContacts();
   }, []);
+
+  // Check if banner should be shown (only if not dismissed in localStorage)
+  useEffect(() => {
+    const dismissed = window.localStorage.getItem("hideGlobalContactsBanner");
+    if (!dismissed && globalContacts.length > 0) {
+      setShowGlobalStoreBanner(true);
+    }
+  }, [globalContacts.length]);
+
+  const handleCloseBanner = () => {
+    setShowGlobalStoreBanner(false);
+    window.localStorage.setItem("hideGlobalContactsBanner", "1");
+  };
 
   const fetchContacts = async () => {
     try {
@@ -64,7 +80,13 @@ export default function ContactosPage() {
           ? data.contacts
           : [];
 
-      setContacts(contactsArray);
+      // Transform API response to match frontend interface
+      const transformedContacts = contactsArray.map((c: any) => ({
+        ...c,
+        phoneNumber: c.phone || c.phoneNumber, // Map phone -> phoneNumber
+      }));
+
+      setContacts(transformedContacts);
 
       // Sync to Zustand store
       const globalFormat = contactsArray.map((c: any) => ({
@@ -223,12 +245,19 @@ export default function ContactosPage() {
         await fetchContacts();
         closeEditModal();
       } else {
-        alert("Error al guardar el contacto");
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || "Error al guardar el contacto";
+        alert(errorMessage);
       }
     } catch (error) {
       console.error("Failed to update contact:", error);
       alert("Error al guardar el contacto");
     }
+  };
+
+  const openChat = (contact: Contact) => {
+    // Navigate to chat page with contact info
+    router.push(`/chat?phone=${encodeURIComponent(contact.phoneNumber)}&name=${encodeURIComponent(contact.name || "")}`);
   };
 
   const deleteContact = async (id: string) => {
@@ -344,9 +373,28 @@ export default function ContactosPage() {
             </div>
 
             {/* Global Store Contacts */}
-            {globalContacts.length > 0 && (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
-                <h3 className="font-semibold text-green-900 mb-3">
+            {globalContacts.length > 0 && showGlobalStoreBanner && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 relative">
+                <button
+                  onClick={handleCloseBanner}
+                  className="absolute top-3 right-3 text-green-700 hover:text-green-900 transition-colors"
+                  title="Cerrar"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+                <h3 className="font-semibold text-green-900 mb-3 pr-8">
                   Contacts from Global Store ({globalContacts.length})
                 </h3>
                 <div className="space-y-2">
@@ -550,6 +598,7 @@ export default function ContactosPage() {
                                     </svg>
                                   </button>
                                   <button
+                                    onClick={() => openChat(contact)}
                                     className="p-2 text-gray-400 hover:text-[#6D5BFA] transition-colors"
                                     title="Abrir chat"
                                   >

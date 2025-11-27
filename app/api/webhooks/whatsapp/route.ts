@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-sender";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
+import { normalizePhoneNumber } from "@/lib/phone-utils";
 
 // GET: Webhook verification (required by Meta)
 export async function GET(request: NextRequest) {
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     const message = messages[0];
-    const from = message.from; // Phone number
+    const from = normalizePhoneNumber(message.from); // Phone number (normalized)
     const messageType = message.type;
     const messageId = message.id;
     const contactName = value.contacts?.[0]?.profile?.name || null;
@@ -220,6 +221,89 @@ export async function POST(request: NextRequest) {
         });
 
         console.log(`[Webhook] Message saved to database with metadata:`, messageMetadata);
+
+        // Check if this chat is assigned to an AI agent
+        if (chat.assignedAgentType === "AI" && chat.assignedAgentId) {
+          console.log(`[AI Agent] ========================================`);
+          console.log(`[AI Agent] Chat assigned to AI Agent: ${chat.assignedAgentId}`);
+          console.log(`[AI Agent] Incoming message: "${messageText}"`);
+
+          try {
+            // Load AI agent config
+            const aiAgent = await prisma.aiAgent.findUnique({
+              where: { id: chat.assignedAgentId },
+            });
+
+            if (!aiAgent) {
+              console.error(`[AI Agent] ERROR: AI agent ${chat.assignedAgentId} not found`);
+            } else {
+              console.log(`[AI Agent] Using AI agent: ${aiAgent.name}`);
+
+              // Get recent conversation history for context
+              const recentMessages = await prisma.message.findMany({
+                where: { chatId: chat.id },
+                orderBy: { createdAt: "desc" },
+                take: 10,
+              });
+
+              // Build conversation context (reverse to get chronological order)
+              const conversationContext = recentMessages
+                .reverse()
+                .map((msg) => ({
+                  role: msg.sender === "contact" ? "user" : "assistant",
+                  content: msg.text || "",
+                }));
+
+              console.log(`[AI Agent] Conversation context: ${conversationContext.length} messages`);
+
+              // Build messages array for AI
+              const aiMessages = [
+                {
+                  role: "system",
+                  content: aiAgent.systemPrompt,
+                },
+                ...conversationContext,
+              ];
+
+              // Call AI endpoint
+              const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/ai-agents`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  agentId: aiAgent.id,
+                  messages: aiMessages,
+                }),
+              });
+
+              if (!aiResponse.ok) {
+                throw new Error(`AI API returned ${aiResponse.status}`);
+              }
+
+              const aiData = await aiResponse.json();
+              const aiMessage = aiData.message || aiData.response || "Lo siento, no puedo responder en este momento.";
+
+              console.log(`[AI Agent] Generated response: "${aiMessage.substring(0, 100)}..."`);
+
+              // Send AI response via WhatsApp
+              await sendAndPersistMessage({
+                deviceId: device.id,
+                toPhoneNumber: from,
+                type: "text",
+                payload: { text: { body: aiMessage } },
+                sender: "agent",
+                textPreview: aiMessage,
+                chatId: chat.id,
+              });
+
+              console.log(`[AI Agent] ✓ AI response sent successfully`);
+              console.log(`[AI Agent] ========================================`);
+            }
+          } catch (aiError: any) {
+            console.error(`[AI Agent ERROR] Failed to generate/send AI response:`, aiError);
+            console.error(`[AI Agent ERROR] Error message:`, aiError.message);
+            console.error(`[AI Agent ERROR] Stack:`, aiError.stack);
+          }
+        }
       } catch (chatError) {
         console.error(`[Webhook] Error saving to Chat system:`, chatError);
       }

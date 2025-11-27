@@ -12,6 +12,20 @@ interface TriggerModalProps {
   onClose: () => void;
 }
 
+// Helper function to format time ago
+function getTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "menos de 1 minuto";
+  if (diffMins < 60) return `${diffMins} minuto${diffMins > 1 ? "s" : ""}`;
+  if (diffHours < 24) return `${diffHours} hora${diffHours > 1 ? "s" : ""}`;
+  return `${diffDays} día${diffDays > 1 ? "s" : ""}`;
+}
+
 export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
   const [type, setType] = useState<TriggerType>(trigger?.type || "none");
   const [oncePerContact, setOncePerContact] = useState(trigger?.oncePerContact || false);
@@ -76,6 +90,14 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
         if ((trigger as any).fieldMappings) {
           setFieldMappings((trigger as any).fieldMappings);
         }
+        // Load available source fields
+        if ((trigger as any).availableSourceFields) {
+          setAvailableSourceFields((trigger as any).availableSourceFields);
+        }
+        // Load last received timestamp
+        if ((trigger as any).lastReceivedAt) {
+          setLastReceivedAt(new Date((trigger as any).lastReceivedAt));
+        }
       }
     }
   }, [trigger]);
@@ -95,6 +117,18 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
   const [thirdPartyTriggerId, setThirdPartyTriggerId] = useState<string | null>(
     trigger?.type === "third_party" && (trigger as any).thirdPartyTriggerId
       ? (trigger as any).thirdPartyTriggerId
+      : null
+  );
+
+  const [availableSourceFields, setAvailableSourceFields] = useState<string[]>(
+    trigger?.type === "third_party" && (trigger as any).availableSourceFields
+      ? (trigger as any).availableSourceFields
+      : []
+  );
+
+  const [lastReceivedAt, setLastReceivedAt] = useState<Date | null>(
+    trigger?.type === "third_party" && (trigger as any).lastReceivedAt
+      ? new Date((trigger as any).lastReceivedAt)
       : null
   );
 
@@ -132,7 +166,11 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
     : "";
 
   const handleCopyWebhook = () => {
-    navigator.clipboard.writeText(webhookUrl);
+    navigator.clipboard.writeText(webhookUrl).then(() => {
+      alert("URL copiada al portapapeles!");
+    }).catch(() => {
+      alert("Error al copiar la URL");
+    });
   };
 
   // Field mapping functions
@@ -141,7 +179,7 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
       ...fieldMappings,
       {
         id: `mapping-${Date.now()}`,
-        sourceKey: "",
+        sourceKey: availableSourceFields[0] || "",
         targetType: "standard",
         targetKey: "name",
       },
@@ -249,29 +287,28 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/20"
         onClick={onClose}
       >
-        {/* Modal Card */}
+        {/* Modal Card - Single scrolling container */}
         <div
-          className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col"
+          className="relative mx-auto w-full max-w-2xl max-h-[90vh] overflow-y-scroll rounded-2xl bg-white p-6 shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header - Fixed at top */}
-          <div className="px-5 pt-4 pb-2">
-            <button
-              onClick={onClose}
-              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <h2 className="text-xl font-semibold text-gray-900">
-              Configurar disparador
-            </h2>
-          </div>
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
 
-          {/* Scrollable Body */}
-          <div className="flex-1 overflow-y-auto px-5 pb-3 pt-1">
-            <div className="space-y-4">
+          {/* Header */}
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">
+            Configurar disparador
+          </h2>
+
+          {/* Content */}
+          <div className="flex flex-col gap-4 mt-4">
               {/* Subtitle */}
               <p className="text-xs text-gray-600">
                 Escribe un título descriptivo y selecciona la opción que mejor se adapte a tus objetivos
@@ -494,6 +531,7 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
                         className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 pr-10 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
                       />
                       <button
+                        type="button"
                         onClick={handleCopyWebhook}
                         className="absolute inset-y-0 right-0 flex items-center pr-3 hover:opacity-70 transition-opacity"
                         title="Copiar URL"
@@ -527,123 +565,148 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
                     </p>
                   </div>
 
-                  {/* Field Mapping */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {/* Field Mapping Section */}
+                  <section className="mt-4">
+                    <h3 className="text-sm font-medium text-gray-900 mb-2">
                       Mapeo de campos
-                    </label>
+                    </h3>
 
-                    {/* Field mapping rows */}
-                    {fieldMappings.length > 0 && (
-                      <div className="space-y-2 mb-3">
-                        {fieldMappings.map((mapping) => (
-                          <div key={mapping.id} className="flex gap-2 items-start">
-                            {/* Source key input */}
-                            <div className="flex-1">
-                              <input
-                                type="text"
-                                value={mapping.sourceKey}
-                                onChange={(e) =>
-                                  updateFieldMapping(mapping.id, {
-                                    sourceKey: e.target.value,
-                                  })
-                                }
-                                placeholder="Campo de origen (ej: full_name)"
-                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
-                              />
-                            </div>
-
-                            {/* Arrow */}
-                            <div className="flex items-center pt-2">
-                              <svg
-                                className="w-4 h-4 text-gray-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M9 5l7 7-7 7"
-                                />
-                              </svg>
-                            </div>
-
-                            {/* Target dropdown */}
-                            <div className="flex-1">
-                              <select
-                                value={`${mapping.targetType}:${mapping.targetKey}`}
-                                onChange={(e) => {
-                                  const [targetType, targetKey] = e.target.value.split(
-                                    ":"
-                                  );
-                                  updateFieldMapping(mapping.id, {
-                                    targetType: targetType as "standard" | "custom",
-                                    targetKey,
-                                  });
-                                }}
-                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
-                              >
-                                <optgroup label="Campos estándar">
-                                  <option value="standard:name">Nombre</option>
-                                  <option value="standard:phone">Teléfono</option>
-                                  <option value="standard:email">Email</option>
-                                </optgroup>
-                                {customFields.length > 0 && (
-                                  <optgroup label="Campos personalizados">
-                                    {customFields.map((field) => (
-                                      <option
-                                        key={field.id}
-                                        value={`custom:${field.key}`}
-                                      >
-                                        {field.name}
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                )}
-                              </select>
-                            </div>
-
-                            {/* Delete button */}
-                            <button
-                              type="button"
-                              onClick={() => removeFieldMapping(mapping.id)}
-                              className="mt-2 text-gray-400 hover:text-red-500 transition-colors"
-                              title="Eliminar"
-                            >
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
+                    {/* Waiting for data message */}
+                    {availableSourceFields.length === 0 && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-sm text-amber-800">
+                          ⏳ En espera de datos… Envía un POST a la URL del webhook para detectar los campos disponibles.
+                        </p>
                       </div>
                     )}
 
-                    {/* Add field button */}
-                    <button
-                      type="button"
-                      onClick={addFieldMapping}
-                      className="inline-flex items-center gap-1 rounded-lg bg-[#6D5BFA] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#5B4BD8]"
-                    >
-                      + Agregar campo
-                    </button>
+                    {/* Mapping card - simple vertical flow */}
+                    {availableSourceFields.length > 0 && (
+                      <div className="rounded-md bg-[#F7F7FF] p-3 border border-gray-200">
+                        {/* Last received timestamp */}
+                        {lastReceivedAt && (
+                          <div className="p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-xs text-green-800">
+                              ✓ Último lead recibido hace {getTimeAgo(lastReceivedAt)}
+                            </p>
+                          </div>
+                        )}
 
-                    <p className="text-xs text-gray-500 mt-2">
-                      Mapea los campos del webhook a los campos de contacto. Si no configuras ningún mapeo, se usarán los campos por defecto (full_name, phone_number, email).
-                    </p>
-                  </div>
+                        {/* Mapping rows */}
+                        <div className="mt-2 space-y-2">
+                          {/* Field mapping rows */}
+                          {fieldMappings.map((mapping) => (
+                            <div key={mapping.id} className="flex gap-2 items-start">
+                              {/* Source key dropdown */}
+                              <div className="flex-1">
+                                <select
+                                  value={mapping.sourceKey}
+                                  onChange={(e) =>
+                                    updateFieldMapping(mapping.id, {
+                                      sourceKey: e.target.value,
+                                    })
+                                  }
+                                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
+                                >
+                                  {availableSourceFields.map((field) => (
+                                    <option key={field} value={field}>
+                                      {field}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Arrow */}
+                              <div className="flex items-center pt-2">
+                                <svg
+                                  className="w-4 h-4 text-gray-400"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 5l7 7-7 7"
+                                  />
+                                </svg>
+                              </div>
+
+                              {/* Target dropdown */}
+                              <div className="flex-1">
+                                <select
+                                  value={`${mapping.targetType}:${mapping.targetKey}`}
+                                  onChange={(e) => {
+                                    const [targetType, targetKey] = e.target.value.split(":");
+                                    updateFieldMapping(mapping.id, {
+                                      targetType: targetType as "standard" | "custom",
+                                      targetKey,
+                                    });
+                                  }}
+                                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-[#6D5BFA]"
+                                >
+                                  <optgroup label="Campos estándar">
+                                    <option value="standard:name">Nombre</option>
+                                    <option value="standard:phone">Teléfono</option>
+                                    <option value="standard:email">Email</option>
+                                  </optgroup>
+                                  {customFields.length > 0 && (
+                                    <optgroup label="Campos personalizados">
+                                      {customFields.map((field) => (
+                                        <option
+                                          key={field.id}
+                                          value={`custom:${field.key}`}
+                                        >
+                                          {field.name}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                </select>
+                              </div>
+
+                              {/* Delete button */}
+                              <button
+                                type="button"
+                                onClick={() => removeFieldMapping(mapping.id)}
+                                className="mt-2 text-gray-400 hover:text-red-500 transition-colors"
+                                title="Eliminar"
+                              >
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+
+                          {/* Add field button */}
+                          <button
+                            type="button"
+                            onClick={addFieldMapping}
+                            className="w-full inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm font-medium bg-[#6D5BFA] text-white hover:bg-[#5B4BD8]"
+                          >
+                            + Agregar campo
+                          </button>
+                        </div>
+
+                        {/* Helper text - outside scroll, inside card */}
+                        <p className="mt-2 text-[11px] text-gray-500">
+                          Mapea los campos del webhook a los campos de contacto. Si no configuras ningún mapeo, se usarán los campos por defecto (full_name, phone_number, email).
+                        </p>
+                      </div>
+                    )}
+                  </section>
                 </>
               )}
 
@@ -667,23 +730,22 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
                   </button>
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* Footer - Fixed at bottom */}
-          <div className="px-5 pt-2 pb-4 flex gap-3 justify-end border-t border-[#E4E6F2]">
-            <button
-              onClick={onClose}
-              className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-5 py-2.5 bg-[#6D5BFA] text-white rounded-xl hover:bg-[#5B4BD8] transition-colors shadow-sm font-medium"
-            >
-              Agregar disparador
-            </button>
+            {/* Footer Buttons */}
+            <div className="mt-6 pt-4 flex gap-3 justify-end border-t border-gray-200">
+              <button
+                onClick={onClose}
+                className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-5 py-2.5 bg-[#6D5BFA] text-white rounded-xl hover:bg-[#5B4BD8] transition-colors shadow-sm font-medium"
+              >
+                Agregar disparador
+              </button>
+            </div>
           </div>
         </div>
       </div>
