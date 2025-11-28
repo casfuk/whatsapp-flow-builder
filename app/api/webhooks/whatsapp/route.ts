@@ -245,49 +245,13 @@ export async function POST(request: NextRequest) {
 
         console.log(`[Webhook] Message saved to database with metadata:`, messageMetadata);
 
-        // Send owner notification for new conversations (first message)
-        // Check if this is the first message (unreadCount == 1 means it was just created)
-        const messageCount = await prisma.message.count({
-          where: { chatId: chat.id },
-        });
-
-        console.log(`[Webhook] ========================================`);
-        console.log(`[Webhook] 🔍 Checking if owner notification should be sent`);
-        console.log(`[Webhook] Message count in this chat: ${messageCount}`);
-        console.log(`[Webhook] Is first message: ${messageCount === 1}`);
-
-        if (messageCount === 1) {
-          console.log(`[Webhook] ✅ This is the FIRST message from this contact`);
-          console.log(`[Webhook] 📤 Calling sendOwnerNotification...`);
-          console.log(`[Webhook]    → from: ${from}`);
-          console.log(`[Webhook]    → lastMessage: "${messageText}"`);
-          console.log(`[Webhook]    → chatId: ${chat.id}`);
-
-          // Send notification to owner (non-blocking)
-          sendOwnerNotification({
-            from: from,
-            lastMessage: messageText,
-            chatId: chat.id,
-          })
-            .then((success) => {
-              if (success) {
-                console.log("[Webhook] ✅ sendOwnerNotification completed successfully");
-              } else {
-                console.error("[Webhook] ❌ sendOwnerNotification returned false");
-              }
-            })
-            .catch((err) => {
-              console.error("[Webhook] ❌ sendOwnerNotification threw an error:", err);
-              console.error("[Webhook] Error details:", {
-                message: err.message,
-                stack: err.stack,
-              });
-              // Don't fail the webhook if notification fails
-            });
-        } else {
-          console.log(`[Webhook] ℹ️ Not sending owner notification (not first message, count: ${messageCount})`);
-        }
-        console.log(`[Webhook] ========================================`);
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ℹ️ NOTE: Owner/Lead notifications are now sent when FLOWS START
+        // ═══════════════════════════════════════════════════════════════════════════
+        // We no longer check "first message only" - notifications are sent every time
+        // a flow is triggered (see sendNewLeadNotification below in flow execution).
+        // This ensures David gets notified for ALL flow starts, not just first messages.
+        // ═══════════════════════════════════════════════════════════════════════════
 
         // Check if this chat is assigned to an AI agent
         if (chat.assignedAgentType === "AI" && chat.assignedAgentId) {
