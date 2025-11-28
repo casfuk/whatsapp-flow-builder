@@ -382,6 +382,7 @@ model Chat {
   tags               String    @default("[]")
   deviceId           String
   isFavorite         Boolean   @default(false)
+  isResponding       Boolean   @default(false) // Prevents double AI responses during delays
   assignedToUserId   String?
   assignedAgentType  String?   // "AI" or "HUMAN"
   assignedAgentId    String?   // ID of AI agent or human agent

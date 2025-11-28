@@ -124,6 +124,22 @@ export async function POST(request: NextRequest) {
 
     const messageText = normalizedText; // ID for engine, title in metadata for UI
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🛡️ EMPTY MESSAGE VALIDATION: Ignore stickers, emojis, empty text
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Prevents AI from responding to:
+    // - Stickers, images, voice notes (already filtered by type above)
+    // - Empty text messages
+    // - Messages with only whitespace
+    // - Single emoji reactions without text
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    if (!messageText || messageText.trim() === "") {
+      console.log("[Webhook] 🛡️ EMPTY MESSAGE: Ignoring empty/whitespace-only message");
+      console.log("[Webhook] This prevents AI from responding to stickers, empty taps, etc.");
+      return NextResponse.json({ status: "ignored (empty message)" });
+    }
+
     console.log(`[Webhook] ========================================`);
     console.log(`[Webhook] Received ${messageType} message from ${from}`);
     console.log(`[Webhook] Incoming text: "${messageText}"`);
