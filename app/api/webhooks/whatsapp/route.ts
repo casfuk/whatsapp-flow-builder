@@ -393,7 +393,28 @@ export async function POST(request: NextRequest) {
           console.log(`[AI Agent] 🤖 Chat assigned to AI Agent: ${chat.assignedAgentId}`);
           console.log(`[AI Agent] 💬 Incoming user message: "${messageText}"`);
 
+          // ═══════════════════════════════════════════════════════════════════════════
+          // 🛡️ DOUBLE RESPONSE SAFEGUARD
+          // ═══════════════════════════════════════════════════════════════════════════
+          // Prevents race conditions when user sends multiple messages quickly
+          // If AI is already responding, ignore this message
+          // ═══════════════════════════════════════════════════════════════════════════
+
+          if (chat.isResponding) {
+            console.log("[AI Agent] 🛡️ BLOCKED: AI is already responding to a previous message");
+            console.log("[AI Agent] This prevents double responses during human delay simulation");
+            return NextResponse.json({ status: "blocked (already responding)" });
+          }
+
           try {
+            // Lock the chat to prevent concurrent responses
+            await prisma.chat.update({
+              where: { id: chat.id },
+              data: { isResponding: true },
+            });
+
+            console.log("[AI Agent] 🔒 Chat locked (isResponding = true)");
+
             // Load AI agent config
             const aiAgent = await prisma.aiAgent.findUnique({
               where: { id: chat.assignedAgentId },
@@ -401,6 +422,11 @@ export async function POST(request: NextRequest) {
 
             if (!aiAgent) {
               console.error(`[AI Agent] ❌ ERROR: AI agent ${chat.assignedAgentId} not found in database`);
+              // Unlock chat before returning
+              await prisma.chat.update({
+                where: { id: chat.id },
+                data: { isResponding: false },
+              });
             } else {
               console.log(`[AI Agent] ✅ Using AI agent: ${aiAgent.name}`);
               console.log(`[AI Agent] 📋 Agent config - Language: ${aiAgent.language}, Tone: ${aiAgent.tone}`);
@@ -477,6 +503,19 @@ export async function POST(request: NextRequest) {
             console.error(`[AI Agent ERROR] ❌ Failed to generate/send AI response:`, aiError);
             console.error(`[AI Agent ERROR] Error message:`, aiError.message);
             console.error(`[AI Agent ERROR] Stack:`, aiError.stack);
+          } finally {
+            // ═══════════════════════════════════════════════════════════════════════════
+            // 🔓 UNLOCK CHAT: Always release the lock, even if there was an error
+            // ═══════════════════════════════════════════════════════════════════════════
+            try {
+              await prisma.chat.update({
+                where: { id: chat.id },
+                data: { isResponding: false },
+              });
+              console.log("[AI Agent] 🔓 Chat unlocked (isResponding = false)");
+            } catch (unlockError) {
+              console.error("[AI Agent] ⚠️ Failed to unlock chat:", unlockError);
+            }
           }
         }
       } catch (chatError) {

@@ -165,7 +165,39 @@ REGLAS GLOBALES (OBLIGATORIAS PARA TODOS LOS AGENTES):
    • [Usuario responde]
    • ... y así sucesivamente
 
-2. MANEJO DE NOMBRES:
+2. 📚 CONTINUIDAD CON EL FLOW (CRÍTICO - EVITA REPETICIONES):
+   • Muchas veces entras DESPUÉS de que un flow automatizado ya empezó la conversación.
+   • El flow puede haber preguntado: objetivo, experiencia, horarios, ubicación, etc.
+   • Recibirás el HISTORIAL COMPLETO de la conversación previa.
+
+   TU OBLIGACIÓN:
+   • LEER el historial antes de responder
+   • IDENTIFICAR qué preguntas ya se hicieron
+   • IDENTIFICAR qué respondió el usuario
+   • NO REPETIR preguntas que ya tienen respuesta
+   • USAR la información existente para sonar coherente
+
+   EJEMPLOS:
+
+   ✅ CORRECTO (sin repetir):
+   Historial muestra:
+     FLOW: ¿Cuál es tu objetivo?
+     USUARIO: Perder peso.
+     FLOW: ¿Has entrenado antes?
+     USUARIO: Un poco.
+
+   Tu respuesta:
+   "Genial, ya veo que tu objetivo es perder peso y que has entrenado un poco antes 💪
+   ¿En qué zona vives normalmente?"
+
+   ❌ INCORRECTO (repitiendo):
+   "¿Cuál es tu objetivo?" (ya preguntado por el flow)
+   "¿Has entrenado antes?" (ya preguntado por el flow)
+
+   • Si necesitas recapitular, hazlo en máximo 1 frase corta.
+   • Siempre avanza con nueva información, no repitas.
+
+3. MANEJO DE NOMBRES:
    • Si conoces el nombre del usuario (ej. "${contactName || "Carmen"}"), úsalo naturalmente.
    • Si NO conoces el nombre, NO lo inventes y NUNCA uses placeholders como {primer_nombre}, {nombre}, etc.
    • Ejemplo CORRECTO con nombre: "Perfecto, Carmen 😊"
@@ -375,14 +407,26 @@ ${aiAgent.systemPrompt || ""}`;
     let aiTurnCount = 0;
 
     if (sessionId) {
-      // Fetch conversation history from database
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 📚 LOAD CONVERSATION HISTORY (CRITICAL FOR FLOW CONTINUITY)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Load ALL previous messages including:
+      // - Flow messages (automated questions)
+      // - User responses
+      // - Previous AI agent messages
+      // This allows the AI to:
+      // - Know what the flow already asked
+      // - Avoid repeating questions
+      // - Build on existing information
+      // ═══════════════════════════════════════════════════════════════════════════
+
       console.log(`[AI Agent] Loading conversation history for session: ${sessionId}`);
 
       try {
         const conversationMessages = await prisma.message.findMany({
           where: { chatId: sessionId },
           orderBy: { createdAt: "asc" },
-          take: 20, // Last 20 messages
+          take: 30, // Last 30 messages (enough to capture full flow context)
         });
 
         console.log(`[AI Agent] Found ${conversationMessages.length} previous messages`);
@@ -391,7 +435,72 @@ ${aiAgent.systemPrompt || ""}`;
         aiTurnCount = conversationMessages.filter((msg) => msg.sender === "agent").length;
         console.log(`[AI Agent] Current AI turn count: ${aiTurnCount}/${aiAgent.maxTurns}`);
 
-        // Convert to OpenAI format
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 📝 FORMAT CONVERSATION HISTORY FOR AI CONTEXT
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Build a summary of what has been asked and answered
+        // This helps the AI understand the conversation context
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        if (conversationMessages.length > 0) {
+          const historyLines: string[] = [
+            "",
+            "═══════════════════════════════════════════════════════════",
+            "📚 HISTORIAL DE CONVERSACIÓN PREVIO (IMPORTANTE - LEER)",
+            "═══════════════════════════════════════════════════════════",
+            "",
+            "Esta conversación ya empezó con un flow automatizado o con otro agente.",
+            "A continuación está el historial completo de lo que se ha preguntado y respondido.",
+            "",
+            "🚨 TU TRABAJO:",
+            "1. LEE este historial cuidadosamente",
+            "2. Identifica qué preguntas ya se hicieron",
+            "3. Identifica qué respondió el usuario",
+            "4. NO REPITAS preguntas que ya tienen respuesta",
+            "5. USA la información que ya tienes para sonar coherente",
+            "",
+            "HISTORIAL:",
+            "---",
+          ];
+
+          conversationMessages.forEach((msg, index) => {
+            let sender = "";
+            if (msg.sender === "contact") {
+              sender = "👤 USUARIO";
+            } else if (msg.sender === "flow") {
+              sender = "🤖 FLOW";
+            } else if (msg.sender === "agent") {
+              sender = `🧠 ${aiAgent.name}`;
+            } else {
+              sender = "📨 SISTEMA";
+            }
+
+            historyLines.push(`${sender}: ${msg.text || "(mensaje vacío)"}`);
+          });
+
+          historyLines.push("---");
+          historyLines.push("");
+          historyLines.push("🎯 INSTRUCCIÓN FINAL:");
+          historyLines.push("Basándote en este historial, continúa la conversación de forma natural.");
+          historyLines.push("NO repitas preguntas que el FLOW o tú ya hiciste.");
+          historyLines.push("Si necesitas recapitular, hazlo en máximo 1 frase corta.");
+          historyLines.push("");
+          historyLines.push("═══════════════════════════════════════════════════════════");
+          historyLines.push("");
+
+          const historyContext = historyLines.join("\n");
+
+          // Add history context as a system message BEFORE the conversation
+          messages.push({
+            role: "system",
+            content: historyContext,
+          });
+
+          console.log(`[AI Agent] ✅ Added conversation history context (${conversationMessages.length} messages)`);
+          console.log(`[AI Agent] History preview:`, historyContext.substring(0, 300) + "...");
+        }
+
+        // Convert to OpenAI format for conversation continuation
         const historyMessages = conversationMessages.map((msg) => ({
           role: msg.sender === "contact" ? "user" : "assistant",
           content: msg.text || "",
