@@ -421,30 +421,57 @@ ${aiAgent.goal ? `• Tu objetivo principal: ${aiAgent.goal}` : ""}
 
       try {
         handoverData = JSON.parse(handoverRaw);
+        console.log("[AI Agent] ========================================");
         console.log("[AI Agent] ✅ Successfully parsed HANDOVER payload");
-        console.log("[AI Agent] Handover data:", JSON.stringify(handoverData, null, 2));
+        console.log("[AI Agent] HANDOVER raw text:", handoverRaw);
+        console.log("[AI Agent] HANDOVER parsed data:", JSON.stringify(handoverData, null, 2));
 
         // Send handover summary to supervisor (David)
         if (sessionId) {
+          console.log("[AI Agent] SessionId provided:", sessionId);
+
           // Get client phone number from chat
           const chat = await prisma.chat.findUnique({
             where: { id: sessionId },
             select: { phoneNumber: true },
           });
 
+          console.log("[AI Agent] Chat lookup result:", chat ? `Found (phone: ${chat.phoneNumber})` : "NOT FOUND");
+          console.log("[AI Agent] Chat phone number:", chat?.phoneNumber || "undefined");
+          console.log("[AI Agent] Agent name:", aiAgent.name);
+
           if (chat && chat.phoneNumber) {
-            console.log("[AI Agent] 📤 Sending handover notification to supervisor (David: 34644412937)...");
+            console.log("[AI Agent] ✅ All data available for handover notification");
+            console.log("[AI Agent] 📤 Calling sendHandoverNotification...");
+            console.log("[AI Agent]    → handoverData:", JSON.stringify(handoverData));
+            console.log("[AI Agent]    → clientPhone:", chat.phoneNumber);
+            console.log("[AI Agent]    → agentName:", aiAgent.name);
+
             // Send notification (non-blocking, with error handling)
-            sendHandoverNotification(handoverData, chat.phoneNumber, aiAgent.name).catch((err) => {
-              console.error("[AI Agent] ⚠️ Failed to send handover notification:", err);
-              // Don't fail the request if notification fails
-            });
+            sendHandoverNotification(handoverData, chat.phoneNumber, aiAgent.name)
+              .then(() => {
+                console.log("[AI Agent] ✅ sendHandoverNotification completed successfully");
+              })
+              .catch((err) => {
+                console.error("[AI Agent] ❌ sendHandoverNotification FAILED:", err);
+                console.error("[AI Agent] Error details:", {
+                  message: err.message,
+                  stack: err.stack,
+                  name: err.name
+                });
+                // Don't fail the request if notification fails
+              });
           } else {
-            console.warn("[AI Agent] ⚠️ Could not send handover notification - chat or phone number not found");
+            console.error("[AI Agent] ❌ CANNOT send handover notification");
+            console.error("[AI Agent] Reason: chat or phone number not found");
+            console.error("[AI Agent] Chat exists:", !!chat);
+            console.error("[AI Agent] Phone number exists:", !!(chat?.phoneNumber));
           }
         } else {
-          console.warn("[AI Agent] ⚠️ Could not send handover notification - no sessionId provided");
+          console.error("[AI Agent] ❌ CANNOT send handover notification");
+          console.error("[AI Agent] Reason: no sessionId provided");
         }
+        console.log("[AI Agent] ========================================");
       } catch (jsonError) {
         console.error("[AI Agent] ❌ Failed to parse HANDOVER JSON");
         console.error("[AI Agent] Raw data:", handoverRaw);

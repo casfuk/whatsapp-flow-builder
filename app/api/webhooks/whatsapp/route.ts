@@ -235,21 +235,43 @@ export async function POST(request: NextRequest) {
           where: { chatId: chat.id },
         });
 
+        console.log(`[Webhook] ========================================`);
+        console.log(`[Webhook] 🔍 Checking if owner notification should be sent`);
+        console.log(`[Webhook] Message count in this chat: ${messageCount}`);
+        console.log(`[Webhook] Is first message: ${messageCount === 1}`);
+
         if (messageCount === 1) {
-          console.log(`[Webhook] 🔔 This is the first message from this contact - sending owner notification`);
+          console.log(`[Webhook] ✅ This is the FIRST message from this contact`);
+          console.log(`[Webhook] 📤 Calling sendOwnerNotification...`);
+          console.log(`[Webhook]    → from: ${from}`);
+          console.log(`[Webhook]    → lastMessage: "${messageText}"`);
+          console.log(`[Webhook]    → chatId: ${chat.id}`);
 
           // Send notification to owner (non-blocking)
           sendOwnerNotification({
             from: from,
             lastMessage: messageText,
             chatId: chat.id,
-          }).catch((err) => {
-            console.error("[Webhook] ⚠️ Failed to send owner notification:", err);
-            // Don't fail the webhook if notification fails
-          });
+          })
+            .then((success) => {
+              if (success) {
+                console.log("[Webhook] ✅ sendOwnerNotification completed successfully");
+              } else {
+                console.error("[Webhook] ❌ sendOwnerNotification returned false");
+              }
+            })
+            .catch((err) => {
+              console.error("[Webhook] ❌ sendOwnerNotification threw an error:", err);
+              console.error("[Webhook] Error details:", {
+                message: err.message,
+                stack: err.stack,
+              });
+              // Don't fail the webhook if notification fails
+            });
         } else {
-          console.log(`[Webhook] Not sending owner notification (message count: ${messageCount})`);
+          console.log(`[Webhook] ℹ️ Not sending owner notification (not first message, count: ${messageCount})`);
         }
+        console.log(`[Webhook] ========================================`);
 
         // Check if this chat is assigned to an AI agent
         if (chat.assignedAgentType === "AI" && chat.assignedAgentId) {
@@ -294,20 +316,43 @@ export async function POST(request: NextRequest) {
               const aiData = await aiResponse.json();
               const aiMessage = aiData.reply || "Lo siento, no puedo responder en este momento.";
 
-              console.log(`[AI Agent] 💡 AI generated response: "${aiMessage}"`);
+              console.log(`[AI Agent] 💡 AI generated response (${aiMessage.length} chars): "${aiMessage.substring(0, 100)}..."`);
 
-              // Send AI response via WhatsApp
-              await sendAndPersistMessage({
-                deviceId: device.id,
-                toPhoneNumber: from,
-                type: "text",
-                payload: { text: { body: aiMessage } },
-                sender: "agent",
-                textPreview: aiMessage,
-                chatId: chat.id,
-              });
+              // ═══════════════════════════════════════════════════════════════════
+              // 📨 SPLIT AI RESPONSE INTO MULTIPLE WHATSAPP MESSAGES BY PARAGRAPHS
+              // ═══════════════════════════════════════════════════════════════════
+              // Split by blank lines (one or more newlines) to create separate bubbles
+              const messageParts = aiMessage
+                .split(/\n{2,}/)           // Split by 2+ newlines (blank lines)
+                .map((part: string) => part.trim())
+                .filter(Boolean);          // Remove empty parts
 
-              console.log(`[AI Agent] ✅ AI response sent successfully to ${from}`);
+              console.log(`[AI Agent] 📩 Split message into ${messageParts.length} part(s)`);
+
+              // Send each part as a separate WhatsApp message, in order
+              for (let i = 0; i < messageParts.length; i++) {
+                const part = messageParts[i];
+                console.log(`[AI Agent] 📤 Sending part ${i + 1}/${messageParts.length} (${part.length} chars): "${part.substring(0, 50)}..."`);
+
+                await sendAndPersistMessage({
+                  deviceId: device.id,
+                  toPhoneNumber: from,
+                  type: "text",
+                  payload: { text: { body: part } },
+                  sender: "agent",
+                  textPreview: part,
+                  chatId: chat.id,
+                });
+
+                console.log(`[AI Agent] ✅ Part ${i + 1}/${messageParts.length} sent successfully`);
+
+                // Small delay between messages to maintain order (50ms)
+                if (i < messageParts.length - 1) {
+                  await new Promise(resolve => setTimeout(resolve, 50));
+                }
+              }
+
+              console.log(`[AI Agent] ✅ All ${messageParts.length} message part(s) sent successfully to ${from}`);
               console.log(`[AI Agent] ========================================`);
             }
           } catch (aiError: any) {
@@ -378,24 +423,46 @@ export async function POST(request: NextRequest) {
           const data = await response.json();
           const aiReply = data.reply;
 
-          console.log(`[Webhook] AI agent response: ${aiReply.substring(0, 100)}...`);
+          console.log(`[Webhook] AI agent response (${aiReply.length} chars): ${aiReply.substring(0, 100)}...`);
 
-          // Send reply via WhatsApp
-          await sendWhatsAppMessage({
-            to: from,
-            message: aiReply,
-          });
+          // ═══════════════════════════════════════════════════════════════════
+          // 📨 SPLIT AI RESPONSE INTO MULTIPLE WHATSAPP MESSAGES BY PARAGRAPHS
+          // ═══════════════════════════════════════════════════════════════════
+          const messageParts = aiReply
+            .split(/\n{2,}/)           // Split by 2+ newlines (blank lines)
+            .map((part: string) => part.trim())
+            .filter(Boolean);          // Remove empty parts
 
-          // Log message
-          await prisma.messageLog.create({
-            data: {
-              phone: from,
-              message: aiReply,
-              status: "sent",
-            },
-          });
+          console.log(`[Webhook] 📩 Split message into ${messageParts.length} part(s)`);
 
-          console.log(`[Webhook] ✓ AI agent reply sent from ${data.agentName}`);
+          // Send each part as a separate WhatsApp message, in order
+          for (let i = 0; i < messageParts.length; i++) {
+            const part = messageParts[i];
+            console.log(`[Webhook] 📤 Sending part ${i + 1}/${messageParts.length}: "${part.substring(0, 50)}..."`);
+
+            await sendWhatsAppMessage({
+              to: from,
+              message: part,
+            });
+
+            // Log each message part
+            await prisma.messageLog.create({
+              data: {
+                phone: from,
+                message: part,
+                status: "sent",
+              },
+            });
+
+            console.log(`[Webhook] ✅ Part ${i + 1}/${messageParts.length} sent`);
+
+            // Small delay between messages to maintain order (50ms)
+            if (i < messageParts.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+          }
+
+          console.log(`[Webhook] ✓ All ${messageParts.length} message part(s) sent from ${data.agentName}`);
 
           return NextResponse.json({ status: "ai agent replied" });
         } catch (err) {
@@ -949,22 +1016,43 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
             const data = await response.json();
             const aiReply = data.reply;
 
-            console.log(`[Flow Execution]   → AI agent response: ${aiReply.substring(0, 100)}...`);
+            console.log(`[Flow Execution]   → AI agent response (${aiReply.length} chars): ${aiReply.substring(0, 100)}...`);
 
-            const success = await sendWhatsAppMessage({
-              to: phoneNumber,
-              message: aiReply,
-            });
+            // ═══════════════════════════════════════════════════════════════════
+            // 📨 SPLIT AI RESPONSE INTO MULTIPLE WHATSAPP MESSAGES BY PARAGRAPHS
+            // ═══════════════════════════════════════════════════════════════════
+            const messageParts = aiReply
+              .split(/\n{2,}/)           // Split by 2+ newlines (blank lines)
+              .map((part: string) => part.trim())
+              .filter(Boolean);          // Remove empty parts
 
-            await prisma.messageLog.create({
-              data: {
-                phone: phoneNumber,
-                message: aiReply,
-                status: success ? "sent" : "failed",
-              },
-            });
+            console.log(`[Flow Execution]   → Split into ${messageParts.length} part(s)`);
 
-            console.log(`[Flow Execution]   ✓ AI agent reply sent from ${data.agentName}`);
+            // Send each part as a separate WhatsApp message, in order
+            for (let i = 0; i < messageParts.length; i++) {
+              const part = messageParts[i];
+              console.log(`[Flow Execution]   → Sending part ${i + 1}/${messageParts.length}`);
+
+              const success = await sendWhatsAppMessage({
+                to: phoneNumber,
+                message: part,
+              });
+
+              await prisma.messageLog.create({
+                data: {
+                  phone: phoneNumber,
+                  message: part,
+                  status: success ? "sent" : "failed",
+                },
+              });
+
+              // Small delay between messages
+              if (i < messageParts.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+            }
+
+            console.log(`[Flow Execution]   ✓ All ${messageParts.length} AI agent message part(s) sent from ${data.agentName}`);
           } catch (err) {
             console.error(`[Flow Execution]   ✗ Exception while generating AI reply:`, err);
           }

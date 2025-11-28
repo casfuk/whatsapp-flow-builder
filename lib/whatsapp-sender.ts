@@ -194,7 +194,7 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
 }
 
 /**
- * Send notification to owner when a new conversation starts
+ * Send notification to owner/admin when a new conversation starts
  * @param from - User phone number
  * @param lastMessage - Last incoming text
  * @param chatId - Optional internal chat ID
@@ -205,13 +205,18 @@ export async function sendOwnerNotification(opts: {
   chatId?: string;
 }): Promise<boolean> {
   try {
-    const ownerNumber = process.env.OWNER_WHATSAPP_NUMBER;
+    console.log("[OwnerNotification] ========================================");
+    console.log("[OwnerNotification] 🔔 Attempting to send owner notification");
+    console.log("[OwnerNotification] From user:", opts.from);
+    console.log("[OwnerNotification] Message:", opts.lastMessage.substring(0, 100));
+    console.log("[OwnerNotification] Chat ID:", opts.chatId || "N/A");
+
+    // Use David (Admin) as the owner/admin - same as handover notifications
+    const ownerNumber = "34644412937"; // David (Admin) - receives all notifications
     const baseUrl = process.env.APP_BASE_URL;
 
-    if (!ownerNumber) {
-      console.warn("[Notifications] OWNER_WHATSAPP_NUMBER not set, skipping owner notification");
-      return false;
-    }
+    console.log("[OwnerNotification] Owner/Admin number:", ownerNumber);
+    console.log("[OwnerNotification] Base URL:", baseUrl || "not set");
 
     const safeMessage = (opts.lastMessage || "").slice(0, 200); // prevent crazy long messages
 
@@ -232,7 +237,9 @@ export async function sendOwnerNotification(opts: {
 
     const text = bodyLines.join("\n");
 
-    console.log(`[Notifications] Owner notified about new message from ${opts.from}`);
+    console.log("[OwnerNotification] Notification message:");
+    console.log(text);
+    console.log("[OwnerNotification] 📤 Calling sendWhatsAppMessage...");
 
     // Reuse existing WhatsApp send function
     const sent = await sendWhatsAppMessage({
@@ -241,13 +248,22 @@ export async function sendOwnerNotification(opts: {
       type: "text",
     });
 
-    if (!sent) {
-      console.error("[Notifications] ❌ Failed to send notification to owner");
+    if (sent) {
+      console.log("[OwnerNotification] ✅ Owner notification sent successfully to", ownerNumber);
+    } else {
+      console.error("[OwnerNotification] ❌ Failed to send notification to owner");
+      console.error("[OwnerNotification] sendWhatsAppMessage returned false");
     }
 
+    console.log("[OwnerNotification] ========================================");
     return sent;
   } catch (error) {
-    console.error("[Notifications] ❌ Exception while sending notification:", error);
+    console.error("[OwnerNotification] ❌ Exception while sending notification:", error);
+    console.error("[OwnerNotification] Error details:", {
+      message: error instanceof Error ? error.message : "Unknown",
+      stack: error instanceof Error ? error.stack : "N/A",
+    });
+    console.log("[OwnerNotification] ========================================");
     return false;
   }
 }
@@ -372,24 +388,43 @@ export async function sendHandoverNotification(
 
     const summaryText = summaryLines.join("\n");
 
-    console.log("[Handover] Summary text:", summaryText);
+    console.log("[Handover] Summary text to send:");
+    console.log(summaryText);
+    console.log("[Handover] Summary text length:", summaryText.length, "chars");
 
     // Send to supervisor
-    const sent = await sendWhatsAppMessage({
+    console.log("[Handover] 📤 Calling sendWhatsAppMessage...");
+    console.log("[Handover] Parameters:", {
       to: supervisorNumber,
-      message: summaryText,
-      type: "text",
+      messageLength: summaryText.length,
+      type: "text"
     });
 
-    if (sent) {
-      console.log("[Handover] ✅ Handover summary sent successfully to supervisor");
-    } else {
-      console.error("[Handover] ❌ Failed to send handover summary");
+    try {
+      const sent = await sendWhatsAppMessage({
+        to: supervisorNumber,
+        message: summaryText,
+        type: "text",
+      });
+
+      if (sent) {
+        console.log("[Handover] ✅ Handover summary sent successfully to supervisor (34644412937)");
+      } else {
+        console.error("[Handover] ❌ sendWhatsAppMessage returned false");
+        console.error("[Handover] This means the WhatsApp API call failed - check logs above for details");
+      }
+
+      console.log("[Handover] ========================================");
+      return sent;
+    } catch (sendError) {
+      console.error("[Handover] ❌ Exception while calling sendWhatsAppMessage:", sendError);
+      console.error("[Handover] Error details:", {
+        message: sendError instanceof Error ? sendError.message : "Unknown",
+        stack: sendError instanceof Error ? sendError.stack : "N/A",
+      });
+      console.log("[Handover] ========================================");
+      return false;
     }
-
-    console.log("[Handover] ========================================");
-
-    return sent;
   } catch (error) {
     console.error("[Handover] ❌ Exception while sending handover summary:", error);
     return false;
