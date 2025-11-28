@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
-import { sendWhatsAppMessage } from "@/lib/whatsapp-sender";
+import { sendWhatsAppMessage, sendOwnerNotification } from "@/lib/whatsapp-sender";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 
@@ -54,9 +54,16 @@ export async function POST(request: NextRequest) {
     const value = changes?.value;
     const messages = value?.messages;
 
+    // Handle status updates (read receipts, delivery confirmations, etc.)
+    if (value?.statuses) {
+      console.log("[Webhook] 📋 Status update received:", JSON.stringify(value.statuses, null, 2));
+      return NextResponse.json({ ok: true });
+    }
+
+    // If no messages, this is some other type of webhook
     if (!messages || messages.length === 0) {
-      console.log("[Webhook] No messages in payload");
-      return NextResponse.json({ status: "no messages" });
+      console.log("[Webhook] ⚠️ Unknown payload without messages or statuses");
+      return NextResponse.json({ ok: true });
     }
 
     const message = messages[0];
@@ -222,11 +229,33 @@ export async function POST(request: NextRequest) {
 
         console.log(`[Webhook] Message saved to database with metadata:`, messageMetadata);
 
+        // Send owner notification for new conversations (first message)
+        // Check if this is the first message (unreadCount == 1 means it was just created)
+        const messageCount = await prisma.message.count({
+          where: { chatId: chat.id },
+        });
+
+        if (messageCount === 1) {
+          console.log(`[Webhook] 🔔 This is the first message from this contact - sending owner notification`);
+
+          // Send notification to owner (non-blocking)
+          sendOwnerNotification({
+            from: from,
+            lastMessage: messageText,
+            chatId: chat.id,
+          }).catch((err) => {
+            console.error("[Webhook] ⚠️ Failed to send owner notification:", err);
+            // Don't fail the webhook if notification fails
+          });
+        } else {
+          console.log(`[Webhook] Not sending owner notification (message count: ${messageCount})`);
+        }
+
         // Check if this chat is assigned to an AI agent
         if (chat.assignedAgentType === "AI" && chat.assignedAgentId) {
           console.log(`[AI Agent] ========================================`);
-          console.log(`[AI Agent] Chat assigned to AI Agent: ${chat.assignedAgentId}`);
-          console.log(`[AI Agent] Incoming message: "${messageText}"`);
+          console.log(`[AI Agent] 🤖 Chat assigned to AI Agent: ${chat.assignedAgentId}`);
+          console.log(`[AI Agent] 💬 Incoming user message: "${messageText}"`);
 
           try {
             // Load AI agent config
@@ -235,54 +264,37 @@ export async function POST(request: NextRequest) {
             });
 
             if (!aiAgent) {
-              console.error(`[AI Agent] ERROR: AI agent ${chat.assignedAgentId} not found`);
+              console.error(`[AI Agent] ❌ ERROR: AI agent ${chat.assignedAgentId} not found in database`);
             } else {
-              console.log(`[AI Agent] Using AI agent: ${aiAgent.name}`);
+              console.log(`[AI Agent] ✅ Using AI agent: ${aiAgent.name}`);
+              console.log(`[AI Agent] 📋 Agent config - Language: ${aiAgent.language}, Tone: ${aiAgent.tone}`);
+              console.log(`[AI Agent] 🎯 Agent goal: ${aiAgent.goal || "N/A"}`);
 
-              // Get recent conversation history for context
-              const recentMessages = await prisma.message.findMany({
-                where: { chatId: chat.id },
-                orderBy: { createdAt: "desc" },
-                take: 10,
-              });
+              // Call AI endpoint with the user's message
+              console.log(`[AI Agent] 🔄 Calling /api/ai-agent endpoint...`);
 
-              // Build conversation context (reverse to get chronological order)
-              const conversationContext = recentMessages
-                .reverse()
-                .map((msg) => ({
-                  role: msg.sender === "contact" ? "user" : "assistant",
-                  content: msg.text || "",
-                }));
-
-              console.log(`[AI Agent] Conversation context: ${conversationContext.length} messages`);
-
-              // Build messages array for AI
-              const aiMessages = [
-                {
-                  role: "system",
-                  content: aiAgent.systemPrompt,
-                },
-                ...conversationContext,
-              ];
-
-              // Call AI endpoint
-              const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/ai-agents`, {
+              const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/ai-agent`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   agentId: aiAgent.id,
-                  messages: aiMessages,
+                  userMessage: messageText,
+                  sessionId: chat.id,
                 }),
               });
 
+              console.log(`[AI Agent] 📡 AI API response status: ${aiResponse.status}`);
+
               if (!aiResponse.ok) {
-                throw new Error(`AI API returned ${aiResponse.status}`);
+                const errorText = await aiResponse.text();
+                console.error(`[AI Agent] ❌ AI API error response:`, errorText);
+                throw new Error(`AI API returned ${aiResponse.status}: ${errorText}`);
               }
 
               const aiData = await aiResponse.json();
-              const aiMessage = aiData.message || aiData.response || "Lo siento, no puedo responder en este momento.";
+              const aiMessage = aiData.reply || "Lo siento, no puedo responder en este momento.";
 
-              console.log(`[AI Agent] Generated response: "${aiMessage.substring(0, 100)}..."`);
+              console.log(`[AI Agent] 💡 AI generated response: "${aiMessage}"`);
 
               // Send AI response via WhatsApp
               await sendAndPersistMessage({
@@ -295,11 +307,11 @@ export async function POST(request: NextRequest) {
                 chatId: chat.id,
               });
 
-              console.log(`[AI Agent] ✓ AI response sent successfully`);
+              console.log(`[AI Agent] ✅ AI response sent successfully to ${from}`);
               console.log(`[AI Agent] ========================================`);
             }
           } catch (aiError: any) {
-            console.error(`[AI Agent ERROR] Failed to generate/send AI response:`, aiError);
+            console.error(`[AI Agent ERROR] ❌ Failed to generate/send AI response:`, aiError);
             console.error(`[AI Agent ERROR] Error message:`, aiError.message);
             console.error(`[AI Agent ERROR] Stack:`, aiError.stack);
           }
@@ -558,6 +570,76 @@ export async function POST(request: NextRequest) {
     console.log(`[Webhook] SUMMARY: Triggered ${triggeredCount} flow(s) for message from ${from}`);
     console.log(`[Webhook] ========================================`);
 
+    // 🤖 CHECK IF FLOW ASSIGNED CHAT TO AI AGENT (after flow execution)
+    console.log(`[Webhook] 🔍 Checking if chat was assigned to AI agent by flow...`);
+
+    if (device) {
+      try {
+        // Reload chat to get latest assignment (flow might have assigned it to AI)
+        const chatAfterFlow = await prisma.chat.findFirst({
+          where: {
+            phoneNumber: from,
+            deviceId: device.id,
+          },
+          select: {
+            id: true,
+            assignedAgentType: true,
+            assignedAgentId: true,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (!chatAfterFlow) {
+          console.log(`[AI Agent Post-Flow] ⚠️ No chat found after flow execution`);
+        } else if (chatAfterFlow.assignedAgentType === "AI" && chatAfterFlow.assignedAgentId) {
+          console.log(`[AI Agent Post-Flow] ========================================`);
+          console.log(`[AI Agent Post-Flow] 🎯 FLOW ASSIGNED CHAT TO AI AGENT!`);
+          console.log(`[AI Agent Post-Flow] 🤖 Agent ID: ${chatAfterFlow.assignedAgentId}`);
+          console.log(`[AI Agent Post-Flow] 💬 User message: "${messageText}"`);
+
+          try {
+            // Load AI agent
+            const aiAgent = await prisma.aiAgent.findUnique({
+              where: { id: chatAfterFlow.assignedAgentId },
+            });
+
+            if (!aiAgent) {
+              console.error(`[AI Agent Post-Flow] ❌ AI agent not found: ${chatAfterFlow.assignedAgentId}`);
+            } else {
+              console.log(`[AI Agent Post-Flow] ✅ Found AI agent: ${aiAgent.name}`);
+
+              // Note: The initial greeting should have been sent by the flow execution
+              // This block is for handling the case where user sent the trigger message
+              // We only need to respond if this is a new message AFTER assignment
+
+              // Count messages to see if this is the first user message after assignment
+              const messageCount = await prisma.message.count({
+                where: { chatId: chatAfterFlow.id },
+              });
+
+              console.log(`[AI Agent Post-Flow] 📊 Total messages in chat: ${messageCount}`);
+
+              if (messageCount === 1) {
+                // This is the first message (the trigger), initial greeting was already sent by flow
+                console.log(`[AI Agent Post-Flow] ℹ️ This is the trigger message - initial greeting already sent by flow`);
+              } else {
+                // This is a follow-up message, should not happen immediately but handle it
+                console.log(`[AI Agent Post-Flow] 🔄 User sent another message - will be handled by the ongoing conversation logic`);
+              }
+            }
+          } catch (aiError: any) {
+            console.error(`[AI Agent Post-Flow] ❌ Error checking AI agent:`, aiError.message);
+          }
+
+          console.log(`[AI Agent Post-Flow] ========================================`);
+        } else {
+          console.log(`[AI Agent Post-Flow] ℹ️ Chat is not assigned to AI agent (Type: ${chatAfterFlow.assignedAgentType || "none"})`);
+        }
+      } catch (chatError) {
+        console.error(`[AI Agent Post-Flow] ❌ Error loading chat after flow:`, chatError);
+      }
+    }
+
     return NextResponse.json({ status: "processed" });
   } catch (error) {
     console.error("[Webhook] Unhandled error in POST handler:", error);
@@ -625,8 +707,42 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
       return;
     }
 
-    // Initialize engine
-    const engine = new FlowEngine(flow, context.sessionId, context.variables);
+    // Create or update Chat record BEFORE flow execution (needed for AI agent assignment)
+    console.log(`[Flow Execution] Creating/updating Chat for contact...`);
+    const normalizedText = initialMessage;
+    const chat = await prisma.chat.upsert({
+      where: {
+        phoneNumber_deviceId: {
+          phoneNumber,
+          deviceId: deviceId || "",
+        },
+      },
+      create: {
+        phoneNumber,
+        contactName: phoneNumber, // We'll update this from Contact if available
+        deviceId: deviceId || "",
+        lastMessagePreview: normalizedText,
+        lastMessageAt: new Date(),
+        status: "open",
+        unreadCount: 1,
+      },
+      update: {
+        lastMessagePreview: normalizedText,
+        lastMessageAt: new Date(),
+        unreadCount: { increment: 1 },
+        updatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        assignedAgentType: true,
+        assignedAgentId: true,
+      },
+    });
+    console.log(`[Flow Execution] ✓ Chat created/updated: ${chat.id}`);
+    console.log(`[Flow Execution] Chat assignedAgentType: ${chat.assignedAgentType}, assignedAgentId: ${chat.assignedAgentId}`);
+
+    // Initialize engine with chatId
+    const engine = new FlowEngine(flow, context.sessionId, context.variables, chat.id);
 
     console.log(`[Flow Execution] ✓ FlowEngine initialized`);
     console.log(`[Flow Execution] Executing flow from start node ID: ${startNode.id}...`);

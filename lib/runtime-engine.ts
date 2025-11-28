@@ -5,6 +5,7 @@ interface RuntimeContext {
   sessionId: string;
   flowId: string;
   variables: Record<string, any>;
+  chatId?: string; // Optional chat ID for updating Chat record
 }
 
 interface StepExecutionResult {
@@ -20,12 +21,13 @@ export class RuntimeEngine {
   private steps: Map<string, any>;
   private connections: any[];
 
-  constructor(flow: any, sessionId: string, initialVariables: Record<string, any> = {}) {
+  constructor(flow: any, sessionId: string, initialVariables: Record<string, any> = {}, chatId?: string) {
     this.flow = flow;
     this.context = {
       sessionId,
       flowId: flow.id,
       variables: initialVariables,
+      chatId,
     };
 
     // Create a map of steps for quick lookup
@@ -355,12 +357,24 @@ export class RuntimeEngine {
         };
 
       case "assign_conversation":
+        console.log(`[RuntimeEngine] ========================================`);
+        console.log(`[RuntimeEngine] 👤 ASSIGN_CONVERSATION STEP`);
+        console.log(`[RuntimeEngine] Step ID: ${step.id}`);
+        console.log(`[RuntimeEngine] Full config object:`, JSON.stringify(config, null, 2));
+        console.log(`[RuntimeEngine] Parsed agentType: ${config.agentType}`);
+        console.log(`[RuntimeEngine] Parsed agentId: ${config.agentId}`);
+        console.log(`[RuntimeEngine] Parsed assignToSelf: ${config.assignToSelf}`);
+        console.log(`[RuntimeEngine] ========================================`);
+
         // Resolve the assignee
         let resolvedAssigneeId: string | null = null;
         const agentType = config.agentType || "human"; // Default to human
 
+        console.log(`[RuntimeEngine] → agentType (with default): "${agentType}"`);
+
         // If assignToSelf is true or agentId is null/undefined, use default agent
         if (config.assignToSelf === true || !config.agentId) {
+          console.log(`[RuntimeEngine] → Using default agent logic (assignToSelf=${config.assignToSelf}, agentId=${config.agentId})`);
           try {
             const settings = await prisma.settings.findUnique({
               where: { id: 1 },
@@ -387,10 +401,45 @@ export class RuntimeEngine {
         } else {
           // Use the specified agent ID
           resolvedAssigneeId = config.agentId;
+          console.log(`[RuntimeEngine] → Using specified agent ID from config`);
           console.log(
-            `[RuntimeEngine] Assigning to ${agentType} agent: ${resolvedAssigneeId} ` +
+            `[RuntimeEngine] → Assigning to ${agentType} agent: ${resolvedAssigneeId} ` +
             `for session ${this.context.sessionId}`
           );
+        }
+
+        console.log(`[RuntimeEngine] ========================================`);
+        console.log(`[RuntimeEngine] 📋 FINAL RESOLVED VALUES:`);
+        console.log(`[RuntimeEngine] → resolvedAssigneeId: ${resolvedAssigneeId}`);
+        console.log(`[RuntimeEngine] → agentType: ${agentType}`);
+        console.log(`[RuntimeEngine] → chatId: ${this.context.chatId || 'not provided'}`);
+        console.log(`[RuntimeEngine] ========================================`);
+
+        // Update Chat record if chatId is provided and agentType is AI
+        if (this.context.chatId && agentType === "ai" && resolvedAssigneeId) {
+          console.log(`[RuntimeEngine] 🤖 Updating Chat record with AI agent assignment...`);
+          try {
+            const updatedChat = await prisma.chat.update({
+              where: { id: this.context.chatId },
+              data: {
+                assignedAgentType: "AI",
+                assignedAgentId: resolvedAssigneeId,
+                assignedToUserId: null,
+              },
+            });
+            console.log(`[RuntimeEngine] ✅✅✅ Chat record updated successfully!`);
+            console.log(`[RuntimeEngine] Updated Chat:`, JSON.stringify({
+              id: updatedChat.id,
+              assignedAgentType: updatedChat.assignedAgentType,
+              assignedAgentId: updatedChat.assignedAgentId,
+            }, null, 2));
+          } catch (chatUpdateError) {
+            console.error(`[RuntimeEngine] ❌ Failed to update Chat record:`, chatUpdateError);
+          }
+        } else if (!this.context.chatId) {
+          console.log(`[RuntimeEngine] ⚠️ No chatId provided - skipping Chat record update`);
+        } else if (agentType !== "ai") {
+          console.log(`[RuntimeEngine] ℹ️ agentType is "${agentType}" (not "ai") - skipping Chat record update`);
         }
 
         // Update SessionState with the resolved assignee and type

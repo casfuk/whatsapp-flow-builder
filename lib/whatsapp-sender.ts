@@ -192,3 +192,206 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
     return false;
   }
 }
+
+/**
+ * Send notification to owner when a new conversation starts
+ * @param from - User phone number
+ * @param lastMessage - Last incoming text
+ * @param chatId - Optional internal chat ID
+ */
+export async function sendOwnerNotification(opts: {
+  from: string;
+  lastMessage: string;
+  chatId?: string;
+}): Promise<boolean> {
+  try {
+    const ownerNumber = process.env.OWNER_WHATSAPP_NUMBER;
+    const baseUrl = process.env.APP_BASE_URL;
+
+    if (!ownerNumber) {
+      console.warn("[Notifications] OWNER_WHATSAPP_NUMBER not set, skipping owner notification");
+      return false;
+    }
+
+    const safeMessage = (opts.lastMessage || "").slice(0, 200); // prevent crazy long messages
+
+    // Build dashboard URL
+    const dashboardUrl = baseUrl
+      ? `${baseUrl}/chat?phone=${encodeURIComponent(opts.from)}`
+      : "";
+
+    const bodyLines = [
+      "📩 Nueva conversación en FunnelChat",
+      `De: +${opts.from}`,
+      `Mensaje: "${safeMessage}"`,
+    ];
+
+    if (dashboardUrl) {
+      bodyLines.push(`Haz clic aquí para abrir el dashboard 🔗 ${dashboardUrl}`);
+    }
+
+    const text = bodyLines.join("\n");
+
+    console.log(`[Notifications] Owner notified about new message from ${opts.from}`);
+
+    // Reuse existing WhatsApp send function
+    const sent = await sendWhatsAppMessage({
+      to: ownerNumber,
+      message: text,
+      type: "text",
+    });
+
+    if (!sent) {
+      console.error("[Notifications] ❌ Failed to send notification to owner");
+    }
+
+    return sent;
+  } catch (error) {
+    console.error("[Notifications] ❌ Exception while sending notification:", error);
+    return false;
+  }
+}
+
+/**
+ * 🌐 UNIVERSAL HANDOVER NOTIFICATION SYSTEM
+ *
+ * Send handover summary to supervisor when ANY AI agent conversation ends.
+ * This function is agent-agnostic and works for ALL agents (ClaudIA, MarIA, future agents).
+ *
+ * @param handoverData - Parsed JSON object with conversation data (or fallback object if parsing failed)
+ * @param clientPhone - The client's phone number
+ * @param agentName - Optional name of the AI agent (for display in notification)
+ * @returns Promise<boolean> - true if notification was sent successfully
+ */
+export async function sendHandoverNotification(
+  handoverData: Record<string, any>,
+  clientPhone: string,
+  agentName?: string
+): Promise<boolean> {
+  try {
+    const supervisorNumber = "34644412937"; // David (Admin) - receives ALL AI agent HANDOVER notifications
+    const baseUrl = process.env.APP_BASE_URL;
+
+    console.log("[Handover] ========================================");
+    console.log("[Handover] Supervisor number in use:", supervisorNumber);
+    console.log("[Handover] Supervisor number length:", supervisorNumber.length);
+    console.log("[Handover] Supervisor number format check:", {
+      value: supervisorNumber,
+      hasPlus: supervisorNumber.includes('+'),
+      hasSpaces: supervisorNumber.includes(' '),
+      isNumericOnly: /^\d+$/.test(supervisorNumber),
+      expectedLength: supervisorNumber.length === 11
+    });
+    console.log(`[Handover] Sending supervisor summary to ${supervisorNumber} (David)`);
+    console.log(`[Handover] Agent: ${agentName || 'Unknown'}`);
+    console.log("[Handover] Handover data:", handoverData);
+    console.log("[Handover] Client phone:", clientPhone);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🔄 UNIVERSAL BULLET POINT GENERATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This works for ALL agents by dynamically extracting fields from the JSON.
+    // Common fields are prioritized, but ANY field from ANY agent will be included.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    const bulletPoints: string[] = [];
+
+    // Check if this is an error/fallback handover
+    const isErrorHandover = handoverData._error;
+
+    if (isErrorHandover) {
+      // Special handling for malformed JSON handovers
+      bulletPoints.push(`⚠️ Error: ${handoverData._error}`);
+      if (handoverData._rawData) {
+        bulletPoints.push(`📝 Datos crudos: ${handoverData._rawData}`);
+      }
+      if (handoverData._timestamp) {
+        bulletPoints.push(`🕐 Timestamp: ${handoverData._timestamp}`);
+      }
+    } else {
+      // Normal handover - extract common fields first (for ClaudIA, MarIA, etc.)
+
+      // ClaudIA fields (gym leads)
+      if (handoverData.goal) bulletPoints.push(`• Objetivo: ${handoverData.goal}`);
+      if (handoverData.experience) bulletPoints.push(`• Experiencia: ${handoverData.experience}`);
+      if (handoverData.schedule || handoverData.timing) {
+        bulletPoints.push(`• Horario: ${handoverData.schedule || handoverData.timing}`);
+      }
+      if (handoverData.location) bulletPoints.push(`• Ubicación: ${handoverData.location}`);
+      if (handoverData.level || handoverData.fitScore) {
+        bulletPoints.push(`• Nivel: ${handoverData.level || handoverData.fitScore}`);
+      }
+      if (handoverData.injuries) bulletPoints.push(`• Lesiones: ${handoverData.injuries}`);
+      if (handoverData.motivation) bulletPoints.push(`• Motivación: ${handoverData.motivation}`);
+      if (handoverData.notes) bulletPoints.push(`• Notas: ${handoverData.notes}`);
+
+      // MarIA fields (franchise leads)
+      if (handoverData.city) bulletPoints.push(`• Ciudad: ${handoverData.city}`);
+      if (handoverData.country_or_region) bulletPoints.push(`• País/Región: ${handoverData.country_or_region}`);
+      if (handoverData.capital_range) bulletPoints.push(`• Rango de Capital: ${handoverData.capital_range}`);
+      if (handoverData.experience_level) bulletPoints.push(`• Nivel de Experiencia: ${handoverData.experience_level}`);
+      if (handoverData.timeline) bulletPoints.push(`• Horizonte Temporal: ${handoverData.timeline}`);
+      if (handoverData.heard_from) bulletPoints.push(`• Cómo nos conoció: ${handoverData.heard_from}`);
+      if (handoverData.has_trained_at_dlf) bulletPoints.push(`• Ha entrenado en DLFitness: ${handoverData.has_trained_at_dlf}`);
+      if (handoverData.key_questions) bulletPoints.push(`• Preguntas clave: ${handoverData.key_questions}`);
+      if (handoverData.concerns) bulletPoints.push(`• Preocupaciones: ${handoverData.concerns}`);
+
+      // Add any other fields that might exist (future-proof for new agents)
+      const knownKeys = [
+        'goal', 'experience', 'schedule', 'timing', 'location', 'level', 'fitScore',
+        'injuries', 'motivation', 'notes', 'city', 'country_or_region', 'capital_range',
+        'experience_level', 'timeline', 'heard_from', 'has_trained_at_dlf',
+        'key_questions', 'concerns'
+      ];
+
+      Object.keys(handoverData).forEach((key) => {
+        if (!knownKeys.includes(key) && handoverData[key]) {
+          bulletPoints.push(`• ${key}: ${handoverData[key]}`);
+        }
+      });
+    }
+
+    // Build dashboard link
+    const dashboardLink = baseUrl
+      ? `🔗 Abrir el dashboard: ${baseUrl}/chat?phone=${encodeURIComponent(clientPhone)}`
+      : "";
+
+    // Build message with agent name
+    const agentDisplayName = agentName || "AI Agent";
+    const summaryLines = [
+      `📩 Nuevo Handover de ${agentDisplayName}`,
+      `📞 Cliente: +${clientPhone}`,
+      "",
+      ...bulletPoints,
+    ];
+
+    if (dashboardLink) {
+      summaryLines.push("");
+      summaryLines.push(dashboardLink);
+    }
+
+    const summaryText = summaryLines.join("\n");
+
+    console.log("[Handover] Summary text:", summaryText);
+
+    // Send to supervisor
+    const sent = await sendWhatsAppMessage({
+      to: supervisorNumber,
+      message: summaryText,
+      type: "text",
+    });
+
+    if (sent) {
+      console.log("[Handover] ✅ Handover summary sent successfully to supervisor");
+    } else {
+      console.error("[Handover] ❌ Failed to send handover summary");
+    }
+
+    console.log("[Handover] ========================================");
+
+    return sent;
+  } catch (error) {
+    console.error("[Handover] ❌ Exception while sending handover summary:", error);
+    return false;
+  }
+}
