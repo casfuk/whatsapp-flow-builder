@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
-import { sendWhatsAppMessage, sendOwnerNotification } from "@/lib/whatsapp-sender";
+import { sendWhatsAppMessage, sendOwnerNotification, sendNewLeadNotification } from "@/lib/whatsapp-sender";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 
@@ -102,6 +102,22 @@ export async function POST(request: NextRequest) {
     console.log(`[Webhook] Incoming text: "${messageText}"`);
     console.log(`[Webhook] Message text (trimmed, lowercase): "${messageText.toLowerCase().trim()}"`);
     console.log(`[Webhook] Contact name: ${contactName || 'N/A'}`);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🛡️ LOOP PREVENTION: Ignore our own notification messages
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Check if this is one of our own notification messages to prevent loops
+    const isOurNotification =
+      messageText?.startsWith("📩 Nueva conversación en FunnelChat") ||
+      messageText?.startsWith("📩 Nuevo Handover de AI Agent") ||
+      messageText?.startsWith("📩 Nuevo Handover de ClaudIA") ||
+      messageText?.startsWith("📩 Nuevo Handover de MarIA");
+
+    if (isOurNotification) {
+      console.log("[Webhook] 🛡️ LOOP PREVENTION: This is our own notification message - IGNORING");
+      console.log("[Webhook] Message starts with:", messageText.substring(0, 50));
+      return NextResponse.json({ status: "ignored (our own notification)" });
+    }
 
     // Extract profile picture URL if available
     const profilePicUrl = value.contacts?.[0]?.profile?.picture;
@@ -623,6 +639,19 @@ export async function POST(request: NextRequest) {
         console.log(`[Webhook] ✓✓✓ TRIGGERING FLOW: "${flow.name}" (ID: ${flow.id}) for contact: ${from}`);
         console.log(`[Webhook] ➜ Calling executeFlow with flowId=${flow.id}, phone=${from}, contactId=${contact.id}, deviceId=${deviceId}`);
         triggeredCount++;
+
+        // 🚨 IMMEDIATE NOTIFICATION: New lead entering flow
+        console.log(`[Webhook] 📤 Sending new lead notification to admin...`);
+        sendNewLeadNotification({
+          flowName: flow.name,
+          phoneNumber: from,
+          name: contactName,
+          email: null, // Will be populated from custom fields if available
+          source: "whatsapp",
+        }).catch((err) => {
+          console.error("[Webhook] ⚠️ Failed to send new lead notification:", err);
+          // Don't fail the webhook if notification fails
+        });
 
         // Execute the flow
         await executeFlow(flow.id, from, messageText, contact.id, deviceId);

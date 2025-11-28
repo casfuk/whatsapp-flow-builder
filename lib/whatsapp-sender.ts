@@ -194,6 +194,98 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
 }
 
 /**
+ * 🚨 IMMEDIATE NOTIFICATION: New lead enters a flow
+ *
+ * Sends immediate WhatsApp notification to admin when ANY lead enters ANY flow.
+ * NO deduplication - always sends, even for recurring leads.
+ *
+ * @param flowName - Name of the flow being triggered
+ * @param phoneNumber - Lead's phone number
+ * @param name - Lead's name (optional)
+ * @param email - Lead's email (optional)
+ * @param source - Source of the lead (e.g., "whatsapp", "facebook")
+ */
+export async function sendNewLeadNotification(opts: {
+  flowName: string;
+  phoneNumber: string;
+  name?: string | null;
+  email?: string | null;
+  source?: string;
+}): Promise<boolean> {
+  try {
+    console.log("[NewLeadNotification] ========================================");
+    console.log("[NewLeadNotification] 🚨 NEW LEAD entering flow!");
+    console.log("[NewLeadNotification] Flow name:", opts.flowName);
+    console.log("[NewLeadNotification] Phone:", opts.phoneNumber);
+    console.log("[NewLeadNotification] Name:", opts.name || "Not available");
+    console.log("[NewLeadNotification] Email:", opts.email || "Not available");
+    console.log("[NewLeadNotification] Source:", opts.source || "unknown");
+
+    // Always send to David (Admin)
+    const adminNumber = "34644412937"; // David (Admin) - receives all flow entry notifications
+    const baseUrl = process.env.APP_BASE_URL;
+
+    console.log("[NewLeadNotification] Admin number:", adminNumber);
+    console.log("[NewLeadNotification] Base URL:", baseUrl || "not set");
+
+    // Build dashboard URL
+    const dashboardUrl = baseUrl
+      ? `${baseUrl}/chat?phone=${encodeURIComponent(opts.phoneNumber)}`
+      : "";
+
+    // Build notification message
+    const bodyLines = [
+      "📩 Nueva conversación en FunnelChat",
+      "",
+      `• Flow: ${opts.flowName}`,
+      `• Teléfono: +${opts.phoneNumber}`,
+      `• Nombre: ${opts.name || "No disponible"}`,
+      `• Email: ${opts.email || "No disponible"}`,
+    ];
+
+    if (opts.source) {
+      bodyLines.push(`• Fuente: ${opts.source}`);
+    }
+
+    if (dashboardUrl) {
+      bodyLines.push("");
+      bodyLines.push(`🔗 Abrir el dashboard: ${dashboardUrl}`);
+    }
+
+    const text = bodyLines.join("\n");
+
+    console.log("[NewLeadNotification] Notification message:");
+    console.log(text);
+    console.log("[NewLeadNotification] 📤 Calling sendWhatsAppMessage...");
+
+    // Send WhatsApp message to admin
+    const sent = await sendWhatsAppMessage({
+      to: adminNumber,
+      message: text,
+      type: "text",
+    });
+
+    if (sent) {
+      console.log("[NewLeadNotification] ✅ New lead notification sent successfully to", adminNumber);
+    } else {
+      console.error("[NewLeadNotification] ❌ Failed to send new lead notification");
+      console.error("[NewLeadNotification] sendWhatsAppMessage returned false");
+    }
+
+    console.log("[NewLeadNotification] ========================================");
+    return sent;
+  } catch (error) {
+    console.error("[NewLeadNotification] ❌ Exception while sending notification:", error);
+    console.error("[NewLeadNotification] Error details:", {
+      message: error instanceof Error ? error.message : "Unknown",
+      stack: error instanceof Error ? error.stack : "N/A",
+    });
+    console.log("[NewLeadNotification] ========================================");
+    return false;
+  }
+}
+
+/**
  * Send notification to owner/admin when a new conversation starts
  * @param from - User phone number
  * @param lastMessage - Last incoming text
