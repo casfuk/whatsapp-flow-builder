@@ -119,6 +119,97 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ignored (our own notification)" });
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🔧 HIDDEN RESET COMMAND: Clear AI agent memory and restart conversation
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Secret commands for testing/debugging (only you know these)
+    const resetCommands = [
+      "claudia reset",
+      "reset chat",
+      "borrar memoria",
+      "restart ai",
+      "maria reset",
+      "reset claudia",
+      "reset maria"
+    ];
+
+    const messageTextLower = messageText.toLowerCase().trim();
+    const isResetCommand = resetCommands.some(cmd => messageTextLower === cmd);
+
+    if (isResetCommand) {
+      console.log("[Webhook] 🔧 RESET COMMAND DETECTED:", messageText);
+      console.log("[Webhook] Clearing all conversation memory for:", from);
+
+      try {
+        // Find the chat for this contact
+        const chat = await prisma.chat.findFirst({
+          where: {
+            phoneNumber: from,
+          },
+          select: { id: true },
+        });
+
+        if (chat) {
+          // Delete all messages in this chat
+          const deletedCount = await prisma.message.deleteMany({
+            where: { chatId: chat.id },
+          });
+
+          console.log(`[Webhook] ✅ Deleted ${deletedCount.count} message(s) from chat ${chat.id}`);
+
+          // Reset chat metadata
+          await prisma.chat.update({
+            where: { id: chat.id },
+            data: {
+              unreadCount: 0,
+              lastMessagePreview: "Conversación reiniciada",
+              lastMessageAt: new Date(),
+            },
+          });
+
+          console.log("[Webhook] ✅ Chat metadata reset");
+
+          // Delete any active session states
+          const deletedSessions = await prisma.sessionState.deleteMany({
+            where: {
+              sessionId: {
+                startsWith: from,
+              },
+            },
+          });
+
+          console.log(`[Webhook] ✅ Deleted ${deletedSessions.count} active session(s)`);
+
+          // Send confirmation message
+          await sendWhatsAppMessage({
+            to: from,
+            message: "Hecho 😊 Empezamos desde cero. ¿En qué puedo ayudarte?",
+            type: "text",
+          });
+
+          console.log("[Webhook] ✅ Reset confirmation sent");
+          console.log("[Webhook] 🔧 Memory cleared successfully for:", from);
+        } else {
+          console.log("[Webhook] ⚠️ No chat found for:", from);
+          await sendWhatsAppMessage({
+            to: from,
+            message: "No hay conversación que borrar 😊",
+            type: "text",
+          });
+        }
+
+        return NextResponse.json({ status: "reset successful" });
+      } catch (resetError) {
+        console.error("[Webhook] ❌ Error during reset:", resetError);
+        await sendWhatsAppMessage({
+          to: from,
+          message: "Error al reiniciar. Intenta de nuevo.",
+          type: "text",
+        });
+        return NextResponse.json({ status: "reset failed" });
+      }
+    }
+
     // Extract profile picture URL if available
     const profilePicUrl = value.contacts?.[0]?.profile?.picture;
 

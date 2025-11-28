@@ -66,7 +66,9 @@ export async function POST(request: NextRequest) {
     // 🚨 NEW LEAD NOTIFICATION: Send notification on first AI message in chat
     if (sessionId) {
       try {
-        // Count messages sent by agent in this chat
+        // Count messages sent by AGENT (not all messages, not incoming messages)
+        // We want to know if this is the FIRST time the AI is responding in this chat
+        // If aiMessageCount === 0, this is a new AI conversation → notify admin
         const aiMessageCount = await prisma.message.count({
           where: {
             chatId: sessionId,
