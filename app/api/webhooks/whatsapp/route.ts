@@ -5,6 +5,33 @@ import { sendWhatsAppMessage, sendOwnerNotification, sendNewLeadNotification } f
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 🧠 HUMAN-LIKE DELAY SIMULATION
+// ═══════════════════════════════════════════════════════════════════════════
+// Simulates human typing/thinking time before sending AI messages
+// Makes conversations feel natural and not robotic
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generate random delay between 3-10 seconds to simulate human behavior
+ * @returns delay in milliseconds (3000-10000ms)
+ */
+function getHumanDelay(): number {
+  const minDelay = 3000; // 3 seconds
+  const maxDelay = 10000; // 10 seconds
+  return minDelay + Math.random() * (maxDelay - minDelay);
+}
+
+/**
+ * Wait for a random human-like delay
+ */
+async function simulateHumanDelay(): Promise<void> {
+  const delay = getHumanDelay();
+  console.log(`[Human Delay] ⏱️ Waiting ${(delay / 1000).toFixed(1)}s to simulate human typing...`);
+  await new Promise(resolve => setTimeout(resolve, delay));
+  console.log(`[Human Delay] ✅ Delay complete, sending message now`);
+}
+
 // GET: Webhook verification (required by Meta)
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -400,6 +427,10 @@ export async function POST(request: NextRequest) {
 
               console.log(`[AI Agent] 📩 Split message into ${messageParts.length} part(s)`);
 
+              // 🧠 SIMULATE HUMAN DELAY BEFORE SENDING (3-10 seconds)
+              // This makes the conversation feel natural and not robotic
+              await simulateHumanDelay();
+
               // Send each part as a separate WhatsApp message, in order
               for (let i = 0; i < messageParts.length; i++) {
                 const part = messageParts[i];
@@ -505,6 +536,9 @@ export async function POST(request: NextRequest) {
             .filter(Boolean);          // Remove empty parts
 
           console.log(`[Webhook] 📩 Split message into ${messageParts.length} part(s)`);
+
+          // 🧠 SIMULATE HUMAN DELAY BEFORE SENDING (3-10 seconds)
+          await simulateHumanDelay();
 
           // Send each part as a separate WhatsApp message, in order
           for (let i = 0; i < messageParts.length; i++) {
@@ -1111,6 +1145,9 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
               .filter(Boolean);          // Remove empty parts
 
             console.log(`[Flow Execution]   → Split into ${messageParts.length} part(s)`);
+
+            // 🧠 SIMULATE HUMAN DELAY BEFORE SENDING (3-10 seconds)
+            await simulateHumanDelay();
 
             // Send each part as a separate WhatsApp message, in order
             for (let i = 0; i < messageParts.length; i++) {
