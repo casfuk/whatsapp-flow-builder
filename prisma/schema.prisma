@@ -346,8 +346,8 @@ model AiAgent {
   language     String   @default("es")
   tone         String   @default("professional")
   goal         String?
-  systemPrompt String
-  maxTurns     Int      @default(10)
+  systemPrompt String   @db.Text
+  maxTurns     Int      @default(20) // Updated: increased from 10 to 20 for longer conversations
   createdById  String?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
