@@ -1190,6 +1190,97 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
       } else if (action.type === "assign_conversation") {
         console.log(`[Flow Execution]   → Assigning conversation to: ${action.assigneeId || 'NULL'}`);
         console.log(`[Flow Execution]   → Assignment type: ${action.assigneeType || 'human'}`);
+        console.log(`[Flow Execution]   → Assign to self: ${action.assignToSelf || false}`);
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 📩 SEND "ASSIGN TO ME" NOTIFICATION
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Send WhatsApp notification to admin when "Assign to Me" is triggered
+        if (action.assignToSelf === true && action.assigneeType === "human") {
+          console.log(`[Flow Execution]   → "Assign to Me" triggered - sending notification to admin`);
+
+          try {
+            // Get contact info
+            const contact = await prisma.contact.findFirst({
+              where: {
+                phone: phoneNumber,
+                deviceId: deviceId,
+              },
+              include: {
+                tags: {
+                  include: {
+                    tag: true,
+                  },
+                },
+              },
+            });
+
+            // Get session variables
+            const session = await prisma.sessionState.findUnique({
+              where: { sessionId: sessionId },
+            });
+
+            const variables = session?.variablesJson ? JSON.parse(session.variablesJson) : {};
+            const tags = contact?.tags.map(ct => ct.tag.name).join(", ") || "Sin etiquetas";
+            const flowName = action.flowName || "Unknown Flow";
+            const contactName = contact?.name || phoneNumber;
+            const baseUrl = process.env.APP_BASE_URL;
+
+            // Build summary from session variables (latest answers)
+            const summaryLines: string[] = [];
+            Object.keys(variables).forEach((key) => {
+              if (key !== "phone" && key !== "sessionId" && variables[key]) {
+                summaryLines.push(`• ${key}: ${variables[key]}`);
+              }
+            });
+            const summary = summaryLines.length > 0
+              ? summaryLines.join("\n")
+              : "No hay información adicional disponible";
+
+            // Build dashboard URL
+            const dashboardUrl = baseUrl
+              ? `${baseUrl}/chat?phone=${encodeURIComponent(phoneNumber)}`
+              : "";
+
+            // Build notification message
+            const notificationLines = [
+              "📩 Nueva conversación asignada a ti",
+              "",
+              `• Flow: ${flowName}`,
+              `• Contacto: ${contactName}`,
+              `• Teléfono: +${phoneNumber}`,
+              `• Etiquetas: ${tags}`,
+              "",
+              "📋 Resumen:",
+              summary,
+            ];
+
+            if (dashboardUrl) {
+              notificationLines.push("");
+              notificationLines.push(`🔗 Abrir el dashboard: ${dashboardUrl}`);
+            }
+
+            const notificationText = notificationLines.join("\n");
+
+            console.log(`[Flow Execution]   → Notification message:`);
+            console.log(notificationText);
+
+            // Send WhatsApp notification to admin
+            const sent = await sendWhatsAppMessage({
+              to: "34644412937", // Admin number
+              message: notificationText,
+              type: "text",
+            });
+
+            if (sent) {
+              console.log(`[Flow Execution]   ✓ "Assign to Me" notification sent successfully`);
+            } else {
+              console.error(`[Flow Execution]   ✗ Failed to send "Assign to Me" notification`);
+            }
+          } catch (notificationError: any) {
+            console.error(`[Flow Execution]   ✗ Error sending "Assign to Me" notification:`, notificationError);
+          }
+        }
 
         // Check if this is an AI agent assignment
         if (action.assigneeType === "ai" && action.assigneeId) {

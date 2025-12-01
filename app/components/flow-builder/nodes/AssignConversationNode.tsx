@@ -41,7 +41,11 @@ export function AssignConversationNode({
     // Load AI agents from API
     fetch("/api/ai-agents")
       .then((res) => res.json())
-      .then((data) => setAiAgents(data.filter((a: AiAgent) => a.isActive)))
+      .then((data) => {
+        // API returns { success: true, agents: [...], count: X }
+        const agents = data.agents || data || [];
+        setAiAgents(agents.filter((a: AiAgent) => a.isActive));
+      })
       .catch((err) => console.error("Failed to load AI agents:", err));
 
     // Load devices from API

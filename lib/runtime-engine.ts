@@ -477,7 +477,10 @@ export class RuntimeEngine {
         actions.push({
           type: "assign_conversation",
           assigneeId: resolvedAssigneeId,
+          assigneeType: agentType,
+          assignToSelf: config.assignToSelf === true || !config.agentId,
           sessionId: this.context.sessionId,
+          flowName: this.flow.name,
         });
 
         return {
