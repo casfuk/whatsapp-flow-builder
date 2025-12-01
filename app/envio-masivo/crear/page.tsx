@@ -51,6 +51,7 @@ export default function CreateMassSendPage() {
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [previewCount, setPreviewCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [showFieldsDropdown, setShowFieldsDropdown] = useState(false);
   const [fieldSearchTerm, setFieldSearchTerm] = useState("");
 
@@ -251,6 +252,51 @@ export default function CreateMassSendPage() {
     }, 0);
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validImageTypes = ["image/jpeg", "image/jpg", "image/png"];
+    const validVideoTypes = ["video/mp4"];
+    const isImage = validImageTypes.includes(file.type);
+    const isVideo = validVideoTypes.includes(file.type);
+
+    if (formData.mediaType === "IMAGE" && !isImage) {
+      alert("Por favor, sube una imagen JPG o PNG");
+      return;
+    }
+
+    if (formData.mediaType === "VIDEO" && !isVideo) {
+      alert("Por favor, sube un video MP4");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formDataUpload,
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to upload file");
+      }
+
+      const data = await res.json();
+      setFormData({ ...formData, mediaUrl: data.url });
+      alert(`✅ Archivo subido correctamente: ${file.name}`);
+    } catch (error: any) {
+      alert(`Error al subir archivo: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const systemFields = [
     { key: "nombre_completo", label: "Nombre completo" },
     { key: "primer_nombre", label: "Primer nombre" },
@@ -386,13 +432,67 @@ export default function CreateMassSendPage() {
                     </button>
                   </div>
                   {formData.mediaType !== "NONE" && (
-                    <input
-                      type="url"
-                      value={formData.mediaUrl}
-                      onChange={(e) => setFormData({ ...formData, mediaUrl: e.target.value })}
-                      placeholder="URL del archivo multimedia"
-                      className="mt-3 w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
-                    />
+                    <div className="mt-3 space-y-3">
+                      {/* File Upload Button */}
+                      <div>
+                        <label className="block">
+                          <input
+                            type="file"
+                            accept={formData.mediaType === "IMAGE" ? "image/jpeg,image/jpg,image/png" : "video/mp4"}
+                            onChange={handleFileUpload}
+                            disabled={uploading}
+                            className="hidden"
+                            id="media-file-upload"
+                          />
+                          <div
+                            onClick={() => document.getElementById('media-file-upload')?.click()}
+                            className={`w-full px-4 py-3 border-2 border-dashed rounded-xl text-center cursor-pointer transition-colors ${
+                              uploading
+                                ? "border-gray-300 bg-gray-50 cursor-not-allowed"
+                                : formData.mediaUrl
+                                  ? "border-green-500 bg-green-50"
+                                  : "border-[#6D5BFA] bg-purple-50 hover:bg-purple-100"
+                            }`}
+                          >
+                            {uploading ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-[#6D5BFA] border-t-transparent rounded-full animate-spin"></div>
+                                <span className="text-sm text-gray-600">Subiendo archivo...</span>
+                              </div>
+                            ) : formData.mediaUrl ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <span className="text-green-600">✅</span>
+                                <span className="text-sm text-green-700">Archivo subido - Click para cambiar</span>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="text-2xl mb-1">📁</div>
+                                <p className="text-sm font-medium text-[#6D5BFA]">
+                                  Click para subir {formData.mediaType === "IMAGE" ? "imagen" : "video"}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {formData.mediaType === "IMAGE" ? "JPG, PNG (máx. 5MB)" : "MP4 (máx. 16MB)"}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                      {/* OR divider */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-gray-300"></div>
+                        <span className="text-xs text-gray-500">o usa una URL</span>
+                        <div className="flex-1 h-px bg-gray-300"></div>
+                      </div>
+                      {/* URL Input */}
+                      <input
+                        type="url"
+                        value={formData.mediaUrl}
+                        onChange={(e) => setFormData({ ...formData, mediaUrl: e.target.value })}
+                        placeholder="https://ejemplo.com/imagen.jpg"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -514,16 +614,41 @@ export default function CreateMassSendPage() {
                       </div>
                     </div>
                     <div className="flex-1 flex items-end py-4">
-                      {formData.body && (
+                      {(formData.body || formData.mediaUrl) && (
                         <div className="bg-[#E7FFDB] rounded-lg rounded-bl-none px-3 py-2 max-w-[85%]">
                           {formData.mediaType !== "NONE" && formData.mediaUrl && (
-                            <div className="mb-2 text-xs text-gray-500">
-                              {formData.mediaType === "IMAGE" ? "📷 Imagen" : "🎥 Video"}
+                            <div className="mb-2">
+                              {formData.mediaType === "IMAGE" ? (
+                                <img
+                                  src={formData.mediaUrl}
+                                  alt="Preview"
+                                  className="rounded-lg max-w-full h-auto max-h-48 object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                    e.currentTarget.nextElementSibling!.style.display = "block";
+                                  }}
+                                />
+                              ) : (
+                                <video
+                                  src={formData.mediaUrl}
+                                  controls
+                                  className="rounded-lg max-w-full h-auto max-h-48"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                    e.currentTarget.nextElementSibling!.style.display = "block";
+                                  }}
+                                />
+                              )}
+                              <div className="text-xs text-gray-500 hidden">
+                                {formData.mediaType === "IMAGE" ? "📷 Imagen" : "🎥 Video"}
+                              </div>
                             </div>
                           )}
-                          <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                            {formData.body.replace(/\{\{(\w+)\}\}/g, "$1")}
-                          </p>
+                          {formData.body && (
+                            <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                              {formData.body.replace(/\{\{(\w+)\}\}/g, "$1")}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
