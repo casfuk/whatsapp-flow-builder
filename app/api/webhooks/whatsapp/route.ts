@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
-import { sendWhatsAppMessage, sendOwnerNotification, sendNewLeadNotification } from "@/lib/whatsapp-sender";
+import { sendWhatsAppMessage, sendOwnerNotification, sendNewLeadNotification, sendTypingIndicator } from "@/lib/whatsapp-sender";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 
@@ -415,6 +415,13 @@ export async function POST(request: NextRequest) {
 
             console.log("[AI Agent] 🔒 Chat locked (isResponding = true)");
 
+            // ═══════════════════════════════════════════════════════════════════════════
+            // 💬 TYPING INDICATOR: Show "typing..." in user's WhatsApp
+            // ═══════════════════════════════════════════════════════════════════════════
+            console.log("[AI Agent] 💬 Sending typing_on indicator...");
+            await sendTypingIndicator(from, "typing_on");
+            console.log("[AI Agent] ✅ Typing indicator sent");
+
             // Load AI agent config
             const aiAgent = await prisma.aiAgent.findUnique({
               where: { id: chat.assignedAgentId },
@@ -472,6 +479,13 @@ export async function POST(request: NextRequest) {
               // 🧠 SIMULATE HUMAN DELAY BEFORE SENDING (3-10 seconds)
               // This makes the conversation feel natural and not robotic
               await simulateHumanDelay();
+
+              // ═══════════════════════════════════════════════════════════════════════════
+              // 💬 TYPING INDICATOR: Turn off "typing..." before sending message
+              // ═══════════════════════════════════════════════════════════════════════════
+              console.log("[AI Agent] 💬 Sending typing_off indicator...");
+              await sendTypingIndicator(from, "typing_off");
+              console.log("[AI Agent] ✅ Typing indicator turned off");
 
               // Send each part as a separate WhatsApp message, in order
               for (let i = 0; i < messageParts.length; i++) {
@@ -559,6 +573,13 @@ export async function POST(request: NextRequest) {
         console.log(`[Webhook] Session assigned to AI agent: ${existingSession.assigneeId}`);
 
         try {
+          // ═══════════════════════════════════════════════════════════════════════════
+          // 💬 TYPING INDICATOR: Show "typing..." in user's WhatsApp
+          // ═══════════════════════════════════════════════════════════════════════════
+          console.log("[Webhook] 💬 Sending typing_on indicator...");
+          await sendTypingIndicator(from, "typing_on");
+          console.log("[Webhook] ✅ Typing indicator sent");
+
           // Call AI agent API endpoint
           const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/ai-agent`, {
             method: 'POST',
@@ -594,6 +615,13 @@ export async function POST(request: NextRequest) {
 
           // 🧠 SIMULATE HUMAN DELAY BEFORE SENDING (3-10 seconds)
           await simulateHumanDelay();
+
+          // ═══════════════════════════════════════════════════════════════════════════
+          // 💬 TYPING INDICATOR: Turn off "typing..." before sending message
+          // ═══════════════════════════════════════════════════════════════════════════
+          console.log("[Webhook] 💬 Sending typing_off indicator...");
+          await sendTypingIndicator(from, "typing_off");
+          console.log("[Webhook] ✅ Typing indicator turned off");
 
           // Send each part as a separate WhatsApp message, in order
           for (let i = 0; i < messageParts.length; i++) {
@@ -1168,6 +1196,13 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
           console.log(`[Flow Execution]   → AI agent assignment - generating reply...`);
 
           try {
+            // ═══════════════════════════════════════════════════════════════════════════
+            // 💬 TYPING INDICATOR: Show "typing..." in user's WhatsApp
+            // ═══════════════════════════════════════════════════════════════════════════
+            console.log("[Flow Execution] 💬 Sending typing_on indicator...");
+            await sendTypingIndicator(phoneNumber, "typing_on");
+            console.log("[Flow Execution] ✅ Typing indicator sent");
+
             // Call AI agent API endpoint
             const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/ai-agent`, {
               method: 'POST',
@@ -1203,6 +1238,13 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
 
             // 🧠 SIMULATE HUMAN DELAY BEFORE SENDING (3-10 seconds)
             await simulateHumanDelay();
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // 💬 TYPING INDICATOR: Turn off "typing..." before sending message
+            // ═══════════════════════════════════════════════════════════════════════════
+            console.log("[Flow Execution] 💬 Sending typing_off indicator...");
+            await sendTypingIndicator(phoneNumber, "typing_off");
+            console.log("[Flow Execution] ✅ Typing indicator turned off");
 
             // Send each part as a separate WhatsApp message, in order
             for (let i = 0; i < messageParts.length; i++) {

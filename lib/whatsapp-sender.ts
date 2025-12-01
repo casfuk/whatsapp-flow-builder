@@ -522,3 +522,109 @@ export async function sendHandoverNotification(
     return false;
   }
 }
+
+/**
+ * Send typing indicator to WhatsApp contact
+ * Shows "typing..." indicator in the user's WhatsApp chat
+ *
+ * @param to - Phone number to send indicator to
+ * @param action - "typing_on" to show indicator, "typing_off" to hide it
+ * @returns Promise<boolean> - true if indicator was sent successfully
+ */
+export async function sendTypingIndicator(
+  to: string,
+  action: "typing_on" | "typing_off"
+): Promise<boolean> {
+  console.log(`[Typing Indicator] ========================================`);
+  console.log(`[Typing Indicator] Sending ${action} to: ${to}`);
+
+  try {
+    // Get WhatsApp configuration from database, fallback to env vars
+    let config = await prisma.whatsAppConfig.findFirst({
+      where: {
+        mode: "cloud_api",
+      },
+    });
+
+    // Fallback to environment variables if DB config is missing
+    if (!config || !config.accessToken || !config.phoneNumberId) {
+      console.log("[Typing Indicator] Database config incomplete, using environment variables");
+
+      const envAccessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_CLOUD_API_TOKEN;
+      const envPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+      if (!envAccessToken || !envPhoneNumberId) {
+        console.error("[Typing Indicator] ERROR: WhatsApp Cloud API not configured");
+        return false;
+      }
+
+      config = {
+        id: "env-fallback",
+        mode: "cloud_api",
+        accessToken: envAccessToken,
+        phoneNumberId: envPhoneNumberId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any;
+
+      console.log("[Typing Indicator] ✅ Using environment variables as config");
+    }
+
+    // Final validation
+    if (!config || !config.accessToken || !config.phoneNumberId) {
+      console.error("[Typing Indicator] ERROR: Config validation failed");
+      return false;
+    }
+
+    // Format phone number (remove + and spaces)
+    const formattedPhone = to.replace(/[^0-9]/g, "");
+    console.log(`[Typing Indicator] Formatted phone: ${formattedPhone}`);
+
+    // Build request body
+    const requestBody = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: formattedPhone,
+      type: action,
+    };
+
+    const apiUrl = `https://graph.facebook.com/v18.0/${config.phoneNumberId}/messages`;
+    console.log(`[Typing Indicator] 🚀 SENDING ${action.toUpperCase()} TO WHATSAPP CLOUD API`);
+    console.log(`[Typing Indicator] URL: ${apiUrl}`);
+    console.log(`[Typing Indicator] Body:`, JSON.stringify(requestBody, null, 2));
+
+    // Send typing indicator via WhatsApp Cloud API
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    console.log(`[Typing Indicator] Status: ${response.status} ${response.statusText}`);
+
+    if (!response.ok) {
+      let errorBody;
+      try {
+        errorBody = await response.json();
+        console.error("[Typing Indicator] ❌ ERROR Response:", JSON.stringify(errorBody, null, 2));
+      } catch (parseError) {
+        errorBody = await response.text();
+        console.error("[Typing Indicator] ❌ ERROR Response (Text):", errorBody);
+      }
+      console.log(`[Typing Indicator] ========================================`);
+      return false;
+    }
+
+    const data = await response.json();
+    console.log("[Typing Indicator] ✅ SUCCESS Response:", JSON.stringify(data, null, 2));
+    console.log(`[Typing Indicator] ========================================`);
+    return true;
+  } catch (error) {
+    console.error("[Typing Indicator] EXCEPTION:", error);
+    console.log(`[Typing Indicator] ========================================`);
+    return false;
+  }
+}
