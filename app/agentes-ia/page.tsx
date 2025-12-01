@@ -33,7 +33,7 @@ export default function AiAgentsPage() {
     tone: "professional",
     goal: "",
     systemPrompt: "",
-    maxTurns: 10,
+    maxTurns: 20, // Updated default from 10 to 20
   });
 
   useEffect(() => {
@@ -44,7 +44,8 @@ export default function AiAgentsPage() {
     try {
       const res = await fetch("/api/ai-agents");
       const data = await res.json();
-      setAgents(data);
+      // API returns { success: true, agents: [...], count: X }
+      setAgents(data.agents || data);
     } catch (error) {
       console.error("Failed to load AI agents:", error);
     } finally {
@@ -61,7 +62,7 @@ export default function AiAgentsPage() {
       tone: "professional",
       goal: "",
       systemPrompt: "",
-      maxTurns: 10,
+      maxTurns: 20, // Updated default from 10 to 20
     });
     setShowModal(true);
   };
@@ -81,8 +82,14 @@ export default function AiAgentsPage() {
   };
 
   const handleSave = async () => {
+    // Validation
     if (!formData.name || !formData.systemPrompt) {
       alert("Nombre y System Prompt son requeridos");
+      return;
+    }
+
+    if (formData.maxTurns < 1 || formData.maxTurns > 20) {
+      alert("El máximo de turnos debe estar entre 1 y 20");
       return;
     }
 
@@ -99,9 +106,18 @@ export default function AiAgentsPage() {
         body: JSON.stringify(formData),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        throw new Error("Failed to save AI agent");
+        throw new Error(data.error || "Failed to save AI agent");
       }
+
+      // Success!
+      alert(
+        editingAgent
+          ? "✅ Agente actualizado correctamente. Los cambios se aplicarán en las próximas conversaciones."
+          : "✅ Agente creado correctamente"
+      );
 
       setShowModal(false);
       loadAgents();
@@ -381,11 +397,11 @@ export default function AiAgentsPage() {
                       })
                     }
                     min="1"
-                    max="50"
+                    max="20"
                     className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Después de este número de mensajes, la conversación se derivará automáticamente a un humano
+                    Después de este número de mensajes, la conversación se derivará automáticamente a un humano (máximo: 20)
                   </p>
                 </div>
               </div>
