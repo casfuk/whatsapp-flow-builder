@@ -179,183 +179,235 @@ async function processLeadgenEvent(eventData: any) {
 
     console.log("[Facebook Leadgen] ✓ Contact created/updated:", contact.id);
 
-    // Find the flow configured for Facebook leads
-    // For now, we'll look for any third-party trigger with type "facebook_lead"
-    const triggers = await prisma.thirdPartyTrigger.findMany({
-      where: {
-        type: "facebook_lead",
-      },
+    // Look up the page integration by page_id
+    const pageIntegration = await prisma.facebookPageIntegration.findUnique({
+      where: { pageId: page_id },
       include: {
-        flow: {
-          include: {
-            steps: true,
-            connections: true,
-          },
-        },
-        device: true,
+        leadFormConfigs: true,
       },
     });
 
-    if (triggers.length === 0) {
-      console.log("[Facebook Leadgen] No flows configured for Facebook leads");
+    if (!pageIntegration) {
+      console.log("[Facebook Leadgen] No page integration found for page_id:", page_id);
+      console.log("[Facebook Leadgen] Contact created but no flow triggered");
       return;
     }
 
-    console.log("[Facebook Leadgen] Found ${triggers.length} flow(s) configured for Facebook leads");
+    console.log("[Facebook Leadgen] Found page integration:", pageIntegration.pageName);
 
-    // Trigger each configured flow
-    for (const trigger of triggers) {
+    // Look up the form config
+    const formConfig = pageIntegration.leadFormConfigs.find(
+      (config) => config.formId === form_id && config.isActive
+    );
+
+    let flowId: string | null = null;
+    let tagsToApply: string[] = [];
+
+    if (formConfig && formConfig.flowId) {
+      // Use form-specific config
+      console.log("[Facebook Leadgen] Using form-specific config");
+      flowId = formConfig.flowId;
       try {
-        console.log("[Facebook Leadgen] Triggering flow:", trigger.flow.name);
+        tagsToApply = JSON.parse(formConfig.tags);
+      } catch (e) {
+        tagsToApply = [];
+      }
+    } else if (pageIntegration.defaultFlowId) {
+      // Fall back to default config
+      console.log("[Facebook Leadgen] Using default page config");
+      flowId = pageIntegration.defaultFlowId;
+      try {
+        tagsToApply = JSON.parse(pageIntegration.defaultTags);
+      } catch (e) {
+        tagsToApply = [];
+      }
+    } else {
+      console.log("[Facebook Leadgen] No flow configured for this form or page");
+      console.log("[Facebook Leadgen] Contact created but no flow triggered");
+      return;
+    }
 
-        // Check if runOncePerContact is enabled
-        if (trigger.runOncePerContact) {
-          const existingExecution = await prisma.thirdPartyTriggerExecution.findUnique({
+    console.log("[Facebook Leadgen] Flow ID:", flowId);
+    console.log("[Facebook Leadgen] Tags to apply:", tagsToApply);
+
+    // Apply tags to contact
+    if (tagsToApply.length > 0) {
+      console.log("[Facebook Leadgen] Applying tags to contact");
+      for (const tagName of tagsToApply) {
+        try {
+          // Find or create tag
+          const tag = await prisma.tag.upsert({
+            where: { name: tagName },
+            create: { name: tagName },
+            update: {},
+          });
+
+          // Add tag to contact (ignore if already exists)
+          await prisma.contactTag.upsert({
             where: {
-              triggerId_contactId: {
-                triggerId: trigger.id,
+              contactId_tagId: {
                 contactId: contact.id,
+                tagId: tag.id,
               },
             },
-          });
-
-          if (existingExecution) {
-            console.log("[Facebook Leadgen] ⚠ Contact already triggered this flow (runOncePerContact enabled)");
-            continue;
-          }
-        }
-
-        // Create Chat record for the contact (needed for messaging)
-        const chat = await prisma.chat.upsert({
-          where: {
-            phoneNumber_deviceId: {
-              phoneNumber: contact.phone,
-              deviceId: trigger.deviceId,
-            },
-          },
-          create: {
-            phoneNumber: contact.phone,
-            contactName: contact.name || name || "Facebook Lead",
-            deviceId: trigger.deviceId,
-            lastMessagePreview: "New Facebook lead",
-            lastMessageAt: new Date(),
-            status: "open",
-            unreadCount: 1,
-          },
-          update: {
-            contactName: contact.name || name || undefined,
-            lastMessagePreview: "New Facebook lead",
-            lastMessageAt: new Date(),
-            unreadCount: { increment: 1 },
-            updatedAt: new Date(),
-          },
-        });
-
-        console.log("[Facebook Leadgen] ✓ Chat created/updated:", chat.id);
-
-        // Increment flow execution counter
-        await prisma.flow.update({
-          where: { id: trigger.flowId },
-          data: {
-            executions: {
-              increment: 1,
-            },
-          },
-        });
-
-        // Import FlowEngine dynamically to execute the flow
-        const { FlowEngine } = await import("@/lib/runtime-engine");
-
-        // Find the start node
-        const startNode = trigger.flow.steps.find((s: any) => s.type === "start");
-        if (!startNode) {
-          console.error("[Facebook Leadgen] No start node found in flow");
-          continue;
-        }
-
-        // Generate session ID
-        const sessionId = `${contact.phone}-${trigger.flowId}-${Date.now()}`;
-
-        // Initialize engine
-        const engine = new FlowEngine(
-          trigger.flow,
-          sessionId,
-          {
-            phone: contact.phone,
-            name: contact.name || name || "Lead",
-            email: email || "",
-            contactId: contact.id,
-            leadgen_id,
-            page_id,
-            form_id,
-            ...customFields,
-          },
-          chat.id
-        );
-
-        console.log("[Facebook Leadgen] ✓ FlowEngine initialized");
-        console.log("[Facebook Leadgen] Executing flow from start node...");
-
-        // Execute flow from start
-        const actions = await engine.executeFromStep(startNode.id);
-
-        console.log("[Facebook Leadgen] ✓ Flow execution complete. Generated ${actions.length} action(s)");
-
-        // Process actions (send WhatsApp messages, etc.)
-        const { sendAndPersistMessage } = await import("@/lib/whatsapp-message-service");
-
-        for (const action of actions) {
-          if (action.type === "send_whatsapp") {
-            console.log("[Facebook Leadgen] Sending WhatsApp message to", action.to);
-            try {
-              await sendAndPersistMessage({
-                deviceId: trigger.deviceId,
-                toPhoneNumber: action.to,
-                type: "text",
-                payload: { text: { body: action.text } },
-                sender: "flow",
-                textPreview: action.text,
-              });
-              console.log("[Facebook Leadgen] ✓ Message sent successfully");
-            } catch (err) {
-              console.error("[Facebook Leadgen] ✗ Error sending message:", err);
-            }
-          } else if (action.type === "send_whatsapp_interactive") {
-            console.log("[Facebook Leadgen] Sending interactive WhatsApp message");
-            try {
-              const messageText = action.interactive?.body?.text || "Interactive message";
-              await sendAndPersistMessage({
-                deviceId: trigger.deviceId,
-                toPhoneNumber: action.to,
-                type: "interactive",
-                payload: { interactive: action.interactive },
-                sender: "flow",
-                textPreview: messageText,
-              });
-              console.log("[Facebook Leadgen] ✓ Interactive message sent");
-            } catch (err) {
-              console.error("[Facebook Leadgen] ✗ Error sending interactive message:", err);
-            }
-          }
-          // Add more action handlers as needed
-        }
-
-        // Create execution record if runOncePerContact is enabled
-        if (trigger.runOncePerContact) {
-          await prisma.thirdPartyTriggerExecution.create({
-            data: {
-              triggerId: trigger.id,
+            create: {
               contactId: contact.id,
+              tagId: tag.id,
             },
+            update: {},
           });
-          console.log("[Facebook Leadgen] ✓ Created execution record");
-        }
 
-        console.log("[Facebook Leadgen] ✓ Flow triggered successfully");
-      } catch (flowError) {
-        console.error("[Facebook Leadgen] Error triggering flow:", flowError);
+          console.log("[Facebook Leadgen] ✓ Applied tag:", tagName);
+        } catch (tagError) {
+          console.error("[Facebook Leadgen] Error applying tag:", tagError);
+        }
       }
     }
+
+    // Load the flow
+    const flow = await prisma.flow.findUnique({
+      where: { id: flowId },
+      include: {
+        steps: true,
+        connections: true,
+      },
+    });
+
+    if (!flow) {
+      console.error("[Facebook Leadgen] Flow not found:", flowId);
+      return;
+    }
+
+    console.log("[Facebook Leadgen] Triggering flow:", flow.name);
+
+    // Get the first available device for sending WhatsApp messages
+    const device = await prisma.device.findFirst({
+      where: { isConnected: true },
+    });
+
+    if (!device) {
+      console.error("[Facebook Leadgen] No connected WhatsApp devices found");
+      return;
+    }
+
+    console.log("[Facebook Leadgen] Using device:", device.name);
+
+    // Create Chat record for the contact (needed for messaging)
+    const chat = await prisma.chat.upsert({
+      where: {
+        phoneNumber_deviceId: {
+          phoneNumber: contact.phone,
+          deviceId: device.id,
+        },
+      },
+      create: {
+        phoneNumber: contact.phone,
+        contactName: contact.name || name || "Facebook Lead",
+        deviceId: device.id,
+        lastMessagePreview: "New Facebook lead",
+        lastMessageAt: new Date(),
+        status: "open",
+        unreadCount: 1,
+      },
+      update: {
+        contactName: contact.name || name || undefined,
+        lastMessagePreview: "New Facebook lead",
+        lastMessageAt: new Date(),
+        unreadCount: { increment: 1 },
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log("[Facebook Leadgen] ✓ Chat created/updated:", chat.id);
+
+    // Increment flow execution counter
+    await prisma.flow.update({
+      where: { id: flow.id },
+      data: {
+        executions: {
+          increment: 1,
+        },
+      },
+    });
+
+    // Import FlowEngine dynamically to execute the flow
+    const { FlowEngine } = await import("@/lib/runtime-engine");
+
+    // Find the start node
+    const startNode = flow.steps.find((s: any) => s.type === "start");
+    if (!startNode) {
+      console.error("[Facebook Leadgen] No start node found in flow");
+      return;
+    }
+
+    // Generate session ID
+    const sessionId = `${contact.phone}-${flow.id}-${Date.now()}`;
+
+    // Initialize engine
+    const engine = new FlowEngine(
+      flow,
+      sessionId,
+      {
+        phone: contact.phone,
+        name: contact.name || name || "Lead",
+        email: email || "",
+        contactId: contact.id,
+        leadgen_id,
+        page_id,
+        form_id,
+        ...customFields,
+      },
+      chat.id
+    );
+
+    console.log("[Facebook Leadgen] ✓ FlowEngine initialized");
+    console.log("[Facebook Leadgen] Executing flow from start node...");
+
+    // Execute flow from start
+    const actions = await engine.executeFromStep(startNode.id);
+
+    console.log(`[Facebook Leadgen] ✓ Flow execution complete. Generated ${actions.length} action(s)`);
+
+    // Process actions (send WhatsApp messages, etc.)
+    const { sendAndPersistMessage } = await import("@/lib/whatsapp-message-service");
+
+    for (const action of actions) {
+      if (action.type === "send_whatsapp") {
+        console.log("[Facebook Leadgen] Sending WhatsApp message to", action.to);
+        try {
+          await sendAndPersistMessage({
+            deviceId: device.id,
+            toPhoneNumber: action.to,
+            type: "text",
+            payload: { text: { body: action.text } },
+            sender: "flow",
+            textPreview: action.text,
+          });
+          console.log("[Facebook Leadgen] ✓ Message sent successfully");
+        } catch (err) {
+          console.error("[Facebook Leadgen] ✗ Error sending message:", err);
+        }
+      } else if (action.type === "send_whatsapp_interactive") {
+        console.log("[Facebook Leadgen] Sending interactive WhatsApp message");
+        try {
+          const messageText = action.interactive?.body?.text || "Interactive message";
+          await sendAndPersistMessage({
+            deviceId: device.id,
+            toPhoneNumber: action.to,
+            type: "interactive",
+            payload: { interactive: action.interactive },
+            sender: "flow",
+            textPreview: messageText,
+          });
+          console.log("[Facebook Leadgen] ✓ Interactive message sent");
+        } catch (err) {
+          console.error("[Facebook Leadgen] ✗ Error sending interactive message:", err);
+        }
+      }
+      // Add more action handlers as needed
+    }
+
+    console.log("[Facebook Leadgen] ✓ Flow triggered successfully");
 
     console.log("[Facebook Leadgen] ✓ Lead processing complete");
   } catch (error) {

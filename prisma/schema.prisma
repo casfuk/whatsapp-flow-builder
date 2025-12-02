@@ -208,6 +208,39 @@ model FacebookPageConnection {
   @@index([isDefault])
 }
 
+model FacebookPageIntegration {
+  id              String                     @id @default(cuid())
+  pageId          String                     @unique
+  pageName        String
+  pageAccessToken String
+  defaultFlowId   String?
+  defaultTags     String                     @default("[]") // JSON array of tag names
+  userId          String? // Owner in FunnelChat
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  leadFormConfigs FacebookLeadFormConfig[]
+
+  @@index([pageId])
+  @@index([userId])
+}
+
+model FacebookLeadFormConfig {
+  id                  String                   @id @default(cuid())
+  pageIntegrationId   String
+  formId              String
+  formName            String
+  flowId              String
+  tags                String                   @default("[]") // JSON array of tag names
+  isActive            Boolean                  @default(true)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  pageIntegration     FacebookPageIntegration @relation(fields: [pageIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([pageIntegrationId, formId])
+  @@index([pageIntegrationId])
+  @@index([formId])
+}
+
 model Settings {
   id             Int     @id @default(1)
   whatsappNumber String?
