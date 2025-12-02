@@ -625,7 +625,7 @@ export default function CreateMassSendPage() {
                                   className="rounded-lg max-w-full h-auto max-h-48 object-cover"
                                   onError={(e) => {
                                     e.currentTarget.style.display = "none";
-                                    e.currentTarget.nextElementSibling!.style.display = "block";
+                                    (e.currentTarget.nextElementSibling as HTMLElement)!.style.display = "block";
                                   }}
                                 />
                               ) : (
@@ -635,7 +635,7 @@ export default function CreateMassSendPage() {
                                   className="rounded-lg max-w-full h-auto max-h-48"
                                   onError={(e) => {
                                     e.currentTarget.style.display = "none";
-                                    e.currentTarget.nextElementSibling!.style.display = "block";
+                                    (e.currentTarget.nextElementSibling as HTMLElement)!.style.display = "block";
                                   }}
                                 />
                               )}

@@ -3,6 +3,28 @@
 import { useState, useEffect } from "react";
 import { SidebarLayout } from "@/app/components/SidebarLayout";
 
+interface MetricsData {
+  period: string;
+  startDate: string;
+  endDate: string;
+  metrics: {
+    contacts: {
+      total: number;
+      new: number;
+      byDay: Array<{ date: Date; count: number }>;
+    };
+    messages: {
+      total: number;
+      new: number;
+      byDay: Array<{ date: Date; count: number }>;
+    };
+    automations: {
+      total: number;
+      executions: number;
+    };
+  };
+}
+
 interface Device {
   id: string;
   name: string;
@@ -36,10 +58,18 @@ export default function DashboardPage() {
     businessAccountId: "",
     phoneNumber: "",
   });
+  const [metrics, setMetrics] = useState<MetricsData | null>(null);
+  const [metricsPeriod, setMetricsPeriod] = useState<"day" | "week" | "month">("month");
+  const [metricsLoading, setMetricsLoading] = useState(true);
 
   useEffect(() => {
     fetchDevices();
+    fetchMetrics();
   }, []);
+
+  useEffect(() => {
+    fetchMetrics();
+  }, [metricsPeriod]);
 
   const fetchDevices = async () => {
     try {
@@ -59,6 +89,19 @@ export default function DashboardPage() {
       setDevices([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMetrics = async () => {
+    try {
+      setMetricsLoading(true);
+      const response = await fetch(`/api/metrics?period=${metricsPeriod}`);
+      const data = await response.json();
+      setMetrics(data);
+    } catch (error) {
+      console.error("Failed to fetch metrics:", error);
+    } finally {
+      setMetricsLoading(false);
     }
   };
 
@@ -377,6 +420,240 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Metrics Section */}
+          <div className="mt-12">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Métricas</h2>
+
+              {/* Period Selector */}
+              <div className="flex gap-2 bg-gray-100 p-1 rounded-xl">
+                <button
+                  onClick={() => setMetricsPeriod("day")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    metricsPeriod === "day"
+                      ? "bg-white text-[#6D5BFA] shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Hoy
+                </button>
+                <button
+                  onClick={() => setMetricsPeriod("week")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    metricsPeriod === "week"
+                      ? "bg-white text-[#6D5BFA] shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  7 días
+                </button>
+                <button
+                  onClick={() => setMetricsPeriod("month")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    metricsPeriod === "month"
+                      ? "bg-white text-[#6D5BFA] shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  30 días
+                </button>
+              </div>
+            </div>
+
+            {metricsLoading ? (
+              <div className="text-center py-12 text-gray-500">
+                Cargando métricas...
+              </div>
+            ) : metrics ? (
+              <>
+                {/* Metric Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  {/* Contacts Card */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                        <svg
+                          className="w-6 h-6 text-blue-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-gray-500">
+                        Total: {metrics.metrics.contacts.total}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-medium text-gray-600 mb-1">
+                      Nuevos Contactos
+                    </h3>
+                    <div className="text-3xl font-bold text-gray-900">
+                      {metrics.metrics.contacts.new}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-2">
+                      En los últimos {metricsPeriod === "day" ? "24 horas" : metricsPeriod === "week" ? "7 días" : "30 días"}
+                    </p>
+                  </div>
+
+                  {/* Messages Card */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                        <svg
+                          className="w-6 h-6 text-green-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-gray-500">
+                        Total: {metrics.metrics.messages.total}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-medium text-gray-600 mb-1">
+                      Mensajes Recibidos
+                    </h3>
+                    <div className="text-3xl font-bold text-gray-900">
+                      {metrics.metrics.messages.new}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-2">
+                      En los últimos {metricsPeriod === "day" ? "24 horas" : metricsPeriod === "week" ? "7 días" : "30 días"}
+                    </p>
+                  </div>
+
+                  {/* Automations Card */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                        <svg
+                          className="w-6 h-6 text-purple-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-gray-500">
+                        Flows: {metrics.metrics.automations.total}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-medium text-gray-600 mb-1">
+                      Ejecuciones
+                    </h3>
+                    <div className="text-3xl font-bold text-gray-900">
+                      {metrics.metrics.automations.executions}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Total de automatizaciones ejecutadas
+                    </p>
+                  </div>
+                </div>
+
+                {/* Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Contacts Chart */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Contactos Nuevos
+                    </h3>
+                    <div className="h-64 flex items-end justify-between gap-2">
+                      {metrics.metrics.contacts.byDay.length > 0 ? (
+                        metrics.metrics.contacts.byDay.map((day: any, index: number) => {
+                          const maxCount = Math.max(
+                            ...metrics.metrics.contacts.byDay.map((d: any) => d.count),
+                            1
+                          );
+                          const heightPercentage = (day.count / maxCount) * 100;
+
+                          return (
+                            <div key={index} className="flex-1 flex flex-col items-center">
+                              <div
+                                className="w-full bg-blue-500 rounded-t-lg hover:bg-blue-600 transition-colors relative group"
+                                style={{ height: `${heightPercentage}%` }}
+                              >
+                                <span className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {day.count}
+                                </span>
+                              </div>
+                              <span className="text-xs text-gray-500 mt-2">
+                                {new Date(day.date).getDate()}
+                              </span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="w-full text-center text-gray-500">
+                          No hay datos para mostrar
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Messages Chart */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Mensajes Recibidos
+                    </h3>
+                    <div className="h-64 flex items-end justify-between gap-2">
+                      {metrics.metrics.messages.byDay.length > 0 ? (
+                        metrics.metrics.messages.byDay.map((day: any, index: number) => {
+                          const maxCount = Math.max(
+                            ...metrics.metrics.messages.byDay.map((d: any) => d.count),
+                            1
+                          );
+                          const heightPercentage = (day.count / maxCount) * 100;
+
+                          return (
+                            <div key={index} className="flex-1 flex flex-col items-center">
+                              <div
+                                className="w-full bg-green-500 rounded-t-lg hover:bg-green-600 transition-colors relative group"
+                                style={{ height: `${heightPercentage}%` }}
+                              >
+                                <span className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {day.count}
+                                </span>
+                              </div>
+                              <span className="text-xs text-gray-500 mt-2">
+                                {new Date(day.date).getDate()}
+                              </span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="w-full text-center text-gray-500">
+                          No hay datos para mostrar
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-12 text-gray-500">
+                Error al cargar las métricas
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -30,6 +30,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Increment flow execution counter
+    await prisma.flow.update({
+      where: { id: flow.id },
+      data: {
+        executions: {
+          increment: 1,
+        },
+      },
+    });
+
     // Find the start step
     const startStep = flow.steps.find((s) => s.type === "start");
     if (!startStep) {

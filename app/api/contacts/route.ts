@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizePhoneNumber } from "@/lib/phone-utils";
 
 // GET all contacts
 export async function GET(request: NextRequest) {
@@ -95,17 +96,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Normalize phone number to prevent duplicates
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    console.log(`[Contacts API] Creating/updating contact - Original: ${phone}, Normalized: ${normalizedPhone}`);
+
     // Upsert contact (create or update)
     // Manual contacts have deviceId = "" (empty string for non-WhatsApp contacts)
     const contact = await prisma.contact.upsert({
       where: {
         phone_device: {
-          phone,
+          phone: normalizedPhone,
           deviceId: "",
         },
       },
       create: {
-        phone,
+        phone: normalizedPhone,
         deviceId: "",
         name: name || null,
         email: email || null,

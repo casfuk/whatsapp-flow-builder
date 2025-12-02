@@ -42,6 +42,7 @@ export default function FlowsPage() {
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [togglingFlowId, setTogglingFlowId] = useState<string | null>(null);
+  const [showOptionsMenu, setShowOptionsMenu] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFlows();
@@ -52,10 +53,9 @@ export default function FlowsPage() {
       const response = await fetch("/api/flows");
       const data = await response.json();
 
-      // Enrich with mock data for display
+      // Enrich with display data
       const enrichedFlows = data.map((flow: any) => ({
         ...flow,
-        executions: Math.floor(Math.random() * 500),
         stepsCount: flow.steps?.length || 0,
         trigger: {
           type: "webhook",
@@ -135,6 +135,28 @@ export default function FlowsPage() {
       }
     } catch (error) {
       console.error("Failed to delete flow:", error);
+    }
+  };
+
+  const duplicateFlow = async (flowId: string) => {
+    try {
+      const response = await fetch(`/api/flows/${flowId}/duplicate`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to duplicate flow");
+      }
+
+      const duplicatedFlow = await response.json();
+
+      // Refresh flows list to include the new duplicate
+      fetchFlows();
+
+      alert(`Flow duplicado exitosamente: ${duplicatedFlow.name}`);
+    } catch (error) {
+      console.error("Failed to duplicate flow:", error);
+      alert("Error al duplicar el flow");
     }
   };
 
@@ -691,16 +713,96 @@ export default function FlowsPage() {
                                               Eliminar
                                             </button>
 
-                                            <button className="flex items-center justify-center gap-2 w-full bg-white text-gray-700 border border-gray-300 px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-colors font-medium">
-                                              <svg
-                                                className="w-4 h-4"
-                                                fill="currentColor"
-                                                viewBox="0 0 24 24"
+                                            <div className="relative">
+                                              <button
+                                                onClick={() =>
+                                                  setShowOptionsMenu(
+                                                    showOptionsMenu === flow.id ? null : flow.id
+                                                  )
+                                                }
+                                                className="flex items-center justify-center gap-2 w-full bg-white text-gray-700 border border-gray-300 px-4 py-2.5 rounded-xl hover:bg-gray-50 transition-colors font-medium"
                                               >
-                                                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                                              </svg>
-                                              Más opciones
-                                            </button>
+                                                <svg
+                                                  className="w-4 h-4"
+                                                  fill="currentColor"
+                                                  viewBox="0 0 24 24"
+                                                >
+                                                  <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                                </svg>
+                                                Más opciones
+                                              </button>
+
+                                              {showOptionsMenu === flow.id && (
+                                                <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-10">
+                                                  <button
+                                                    onClick={() => {
+                                                      setShowOptionsMenu(null);
+                                                      router.push(`/flows/${flow.id}`);
+                                                    }}
+                                                    className="flex items-center gap-2 w-full px-4 py-3 hover:bg-gray-50 transition-colors text-left text-gray-700"
+                                                  >
+                                                    <svg
+                                                      className="w-4 h-4"
+                                                      fill="none"
+                                                      stroke="currentColor"
+                                                      viewBox="0 0 24 24"
+                                                    >
+                                                      <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                      />
+                                                    </svg>
+                                                    Editar
+                                                  </button>
+                                                  <button
+                                                    onClick={() => {
+                                                      setShowOptionsMenu(null);
+                                                      duplicateFlow(flow.id);
+                                                    }}
+                                                    className="flex items-center gap-2 w-full px-4 py-3 hover:bg-gray-50 transition-colors text-left text-gray-700"
+                                                  >
+                                                    <svg
+                                                      className="w-4 h-4"
+                                                      fill="none"
+                                                      stroke="currentColor"
+                                                      viewBox="0 0 24 24"
+                                                    >
+                                                      <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                                                      />
+                                                    </svg>
+                                                    Duplicar
+                                                  </button>
+                                                  <button
+                                                    onClick={() => {
+                                                      setShowOptionsMenu(null);
+                                                      deleteFlow(flow.id);
+                                                    }}
+                                                    className="flex items-center gap-2 w-full px-4 py-3 hover:bg-red-50 transition-colors text-left text-red-600 border-t border-gray-100"
+                                                  >
+                                                    <svg
+                                                      className="w-4 h-4"
+                                                      fill="none"
+                                                      stroke="currentColor"
+                                                      viewBox="0 0 24 24"
+                                                    >
+                                                      <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                      />
+                                                    </svg>
+                                                    Eliminar
+                                                  </button>
+                                                </div>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       </div>

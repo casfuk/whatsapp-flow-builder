@@ -316,6 +316,13 @@ export default function ContactosPage() {
     });
   };
 
+  const isNewContact = (createdAt: string) => {
+    const created = new Date(createdAt);
+    const now = new Date();
+    const hoursDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+    return hoursDiff < 24; // New if created within last 24 hours
+  };
+
   const getInitials = (name?: string) => {
     if (!name) return "?";
     return name
@@ -558,8 +565,15 @@ export default function ContactosPage() {
                                     </div>
                                   )}
                                   <div>
-                                    <div className="font-medium text-gray-900">
-                                      {contact.name || "Sin nombre"}
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-gray-900">
+                                        {contact.name || "Sin nombre"}
+                                      </span>
+                                      {isNewContact(contact.createdAt) && (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                          Nuevo
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-xs text-gray-500">
                                       {SOURCE_LABELS[contact.source]}

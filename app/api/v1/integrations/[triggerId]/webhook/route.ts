@@ -344,6 +344,17 @@ async function executeFlowForContact({
       return;
     }
 
+    // Increment flow execution counter
+    await prisma.flow.update({
+      where: { id: flow.id },
+      data: {
+        executions: {
+          increment: 1,
+        },
+      },
+    });
+    console.log(`[Flow Execution] ✓ Flow execution counter incremented`);
+
     // Find the start node
     const startNode = flow.steps.find((s: any) => s.type === "start");
     if (!startNode) {
