@@ -8,47 +8,25 @@ import { normalizePhoneNumber } from "@/lib/phone-utils";
  * Facebook webhook verification endpoint
  * Meta will send a GET request with hub.mode, hub.verify_token, and hub.challenge
  */
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const mode = searchParams.get("hub.mode");
-    const token = searchParams.get("hub.verify_token");
-    const challenge = searchParams.get("hub.challenge");
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const mode = searchParams.get("hub.mode");
+  const token = searchParams.get("hub.verify_token");
+  const challenge = searchParams.get("hub.challenge");
 
-    console.log("[Facebook Webhook] GET verification request received");
-    console.log("[Facebook Webhook] Mode:", mode);
-    console.log("[Facebook Webhook] Token:", token ? "***" : "missing");
-    console.log("[Facebook Webhook] Challenge:", challenge);
+  console.log("[Facebook Webhook] GET verification request received");
+  console.log("[Facebook Webhook] Mode:", mode);
+  console.log("[Facebook Webhook] Token:", token ? "***" : "missing");
+  console.log("[Facebook Webhook] Challenge:", challenge);
 
-    const verifyToken = process.env.FACEBOOK_VERIFY_TOKEN;
-
-    if (!verifyToken) {
-      console.error("[Facebook Webhook] FACEBOOK_VERIFY_TOKEN not set in environment");
-      return NextResponse.json(
-        { error: "Verify token not configured" },
-        { status: 500 }
-      );
-    }
-
-    // Verify the webhook
-    if (mode === "subscribe" && token === verifyToken) {
-      console.log("[Facebook Webhook] ✓ Verification successful");
-      // Return the challenge to confirm the webhook
-      return new NextResponse(challenge, { status: 200 });
-    }
-
-    console.error("[Facebook Webhook] ✗ Verification failed - token mismatch");
-    return NextResponse.json(
-      { error: "Forbidden" },
-      { status: 403 }
-    );
-  } catch (error) {
-    console.error("[Facebook Webhook] GET error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+  if (mode === "subscribe" && token === process.env.FACEBOOK_VERIFY_TOKEN) {
+    console.log("[Facebook Webhook] ✓ Verification successful, returning challenge");
+    // IMPORTANT: return the raw challenge string and 200
+    return new Response(challenge ?? "", { status: 200 });
   }
+
+  console.error("[Facebook Webhook] ✗ Verification failed");
+  return new Response("Forbidden", { status: 403 });
 }
 
 /**
