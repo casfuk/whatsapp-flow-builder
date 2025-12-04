@@ -371,29 +371,68 @@ export async function POST(
       }
     }
 
-    console.log(`[FIELD_MAPPING] Returning fields to Flow Builder (success response)...`);
-    console.log(`[FIELD_MAPPING] Response will include ${fields.length} fields`);
-    console.log(`[FIELD_MAPPING] Final response format:`, {
-      ok: true,
-      contactId: contact.id,
-      flowId: trigger.flowId,
-      fields: fields,
-    });
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 📤 RESPONSE FORMATTING: Different formats for different clients
+    // ═══════════════════════════════════════════════════════════════════════════
+    // - Elementor: Expects simple {success: true} to avoid UI error
+    // - Meta/Flow Builder: Needs detailed response with fields array for mapping
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    return NextResponse.json(
-      {
+    const userAgent = request.headers.get('user-agent') || '';
+    const referer = request.headers.get('referer') || '';
+
+    // Detect Elementor requests (check for Elementor in user-agent or form data)
+    const isElementorRequest =
+      userAgent.toLowerCase().includes('elementor') ||
+      referer.toLowerCase().includes('elementor') ||
+      payload['form_name']?.toLowerCase().includes('elementor') ||
+      payload['page_id'] !== undefined; // Elementor often sends page_id
+
+    console.log(`[FIELD_MAPPING] Request source detection:`);
+    console.log(`[FIELD_MAPPING] User-Agent: ${userAgent}`);
+    console.log(`[FIELD_MAPPING] Referer: ${referer}`);
+    console.log(`[FIELD_MAPPING] Is Elementor: ${isElementorRequest}`);
+
+    if (isElementorRequest) {
+      // Elementor-friendly response: simple and clean
+      console.log(`[FIELD_MAPPING] Returning Elementor-friendly response (simple success)`);
+      return new NextResponse(
+        JSON.stringify({ success: true }),
+        {
+          status: 200,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    } else {
+      // Meta/Flow Builder response: detailed with fields for mapping
+      console.log(`[FIELD_MAPPING] Returning detailed response for Flow Builder/Meta`);
+      console.log(`[FIELD_MAPPING] Response will include ${fields.length} fields`);
+      console.log(`[FIELD_MAPPING] Final response format:`, {
         ok: true,
         contactId: contact.id,
         flowId: trigger.flowId,
-        fields, // Required for Flow Builder to detect field mapping
-      },
-      {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json",
+        fields: fields,
+      });
+
+      return NextResponse.json(
+        {
+          ok: true,
+          contactId: contact.id,
+          flowId: trigger.flowId,
+          fields, // Required for Flow Builder to detect field mapping
         },
-      }
-    );
+        {
+          status: 200,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
   } catch (error: any) {
     console.error(`[Third-Party Webhook] Error:`, error);
     return NextResponse.json(
