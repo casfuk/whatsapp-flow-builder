@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-sender";
+import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
 
 // GET: Webhook verification (required by Meta)
 export async function GET(request: NextRequest) {
@@ -48,6 +49,26 @@ export async function POST(request: NextRequest) {
 
     // Create or update contact
     const contact = await createContactFromLead(leadData);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🔔 ADMIN ALERT: Check and send admin alert for new Facebook lead
+    // ═══════════════════════════════════════════════════════════════════════════
+    const adminNumber = process.env.ADMIN_ALERT_PHONE;
+    if (adminNumber) {
+      try {
+        await checkAndSendAdminAlert({
+          contact,
+          source: "facebook_lead",
+          adminNumber,
+          additionalInfo: `Form ID: ${formId}`,
+        });
+      } catch (alertError) {
+        console.error(`[ADMIN_ALERT_ERROR] Exception in admin alert:`, alertError);
+        // Don't fail the webhook if alert fails
+      }
+    } else {
+      console.warn(`[ADMIN_ALERT] ADMIN_ALERT_PHONE not configured - skipping alert`);
+    }
 
     // Find and trigger active flows with Facebook lead trigger
     const activeFlows = await prisma.flow.findMany({

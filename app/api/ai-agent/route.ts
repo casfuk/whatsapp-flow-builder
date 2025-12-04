@@ -63,23 +63,24 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // 🚨 NEW LEAD NOTIFICATION: Send notification on first AI message in chat
+    // 🚨 NEW LEAD NOTIFICATION: Send notification on first AI message from THIS AGENT
     if (sessionId) {
       try {
-        // Count messages sent by AGENT (not all messages, not incoming messages)
-        // We want to know if this is the FIRST time the AI is responding in this chat
-        // If aiMessageCount === 0, this is a new AI conversation → notify admin
+        // Count messages sent by THIS SPECIFIC AGENT (not all agents)
+        // We want to know if this is the FIRST time THIS AI agent is responding in this chat
+        // This ensures ClaudIA and MarIA send separate notifications
         const aiMessageCount = await prisma.message.count({
           where: {
             chatId: sessionId,
             sender: "agent",
+            agentId: agentId, // ✅ Filter by specific agent
           },
         });
 
-        console.log(`[AI Agent] Agent message count in this chat: ${aiMessageCount}`);
+        console.log(`[AI Agent] Message count for agent ${aiAgent.name} (${agentId}) in this chat: ${aiMessageCount}`);
 
         if (aiMessageCount === 0) {
-          console.log("[AI Agent] 🚨 This is the FIRST AI agent message in this chat!");
+          console.log(`[AI Agent] 🚨 This is the FIRST message from ${aiAgent.name} in this chat!`);
           console.log("[AI Agent] 📤 Sending new lead notification...");
 
           // Get chat info for notification
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
             });
           }
         } else {
-          console.log("[AI Agent] Not sending notification (agent message count: " + aiMessageCount + ")");
+          console.log(`[AI Agent] Not sending notification (${aiAgent.name} message count: ${aiMessageCount})`);
         }
       } catch (notifError) {
         console.error("[AI Agent] ⚠️ Error checking/sending notification:", notifError);
@@ -408,49 +409,133 @@ ${aiAgent.systemPrompt || ""}`;
 
     if (sessionId) {
       // ═══════════════════════════════════════════════════════════════════════════
-      // 📚 LOAD CONVERSATION HISTORY (CRITICAL FOR FLOW CONTINUITY)
+      // 🔄 CHECK IF AGENT CHANGED (FOR FRESH INTRODUCTION)
       // ═══════════════════════════════════════════════════════════════════════════
-      // Load ALL previous messages including:
-      // - Flow messages (automated questions)
-      // - User responses
-      // - Previous AI agent messages
-      // This allows the AI to:
-      // - Know what the flow already asked
-      // - Avoid repeating questions
-      // - Build on existing information
+      // When a flow assigns a different agent (e.g., ClaudIA → MarIA),
+      // we need to reset the turn count for the NEW agent and trigger a fresh intro
+      // ═══════════════════════════════════════════════════════════════════════════
+
+      console.log(`[AI Agent] ========================================`);
+      console.log(`[AI Agent] 🔍 CHECKING AGENT ASSIGNMENT`);
+
+      const chat = await prisma.chat.findUnique({
+        where: { id: sessionId },
+        select: {
+          assignedAgentId: true,
+          perAgentTurnCount: true,
+          assignedAgentType: true,
+        },
+      });
+
+      if (chat) {
+        console.log(`[AI Agent] Chat assigned to: ${chat.assignedAgentId || "none"}`);
+        console.log(`[AI Agent] Current agent: ${agentId}`);
+        console.log(`[AI Agent] Assignment type: ${chat.assignedAgentType || "none"}`);
+
+        // Parse per-agent turn counts
+        let perAgentTurnCount: Record<string, number> = {};
+        try {
+          perAgentTurnCount = JSON.parse(chat.perAgentTurnCount || "{}");
+          console.log(`[AI Agent] Per-agent turn counts:`, perAgentTurnCount);
+        } catch (e) {
+          console.warn(`[AI Agent] Failed to parse perAgentTurnCount, using empty object`);
+        }
+
+        // Get turn count for THIS specific agent
+        aiTurnCount = perAgentTurnCount[agentId] || 0;
+        console.log(`[AI Agent] Turn count for ${aiAgent.name} (${agentId}): ${aiTurnCount}/${aiAgent.maxTurns}`);
+
+        // Check if this is a NEW agent assignment (agent changed)
+        const agentChanged = chat.assignedAgentId && chat.assignedAgentId !== agentId;
+
+        if (agentChanged) {
+          console.log(`[AI Agent] 🔄 AGENT CHANGE DETECTED!`);
+          console.log(`[AI Agent] Previous agent: ${chat.assignedAgentId}`);
+          console.log(`[AI Agent] New agent: ${agentId} (${aiAgent.name})`);
+          console.log(`[AI Agent] ✨ This agent gets a FRESH START`);
+          console.log(`[AI Agent] Turn count for ${aiAgent.name} will start from 0`);
+
+          // Reset turn count for the new agent is handled below when counting actual messages
+        }
+      }
+      console.log(`[AI Agent] ========================================`);
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 📚 LOAD CONVERSATION HISTORY (PER-AGENT FILTERING)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Load messages that THIS AGENT should see:
+      // ✅ Flow messages (automated questions) - ALL agents see these
+      // ✅ User responses - ALL agents see these
+      // ✅ Messages from THIS AGENT ONLY (not from other agents)
+      // ❌ Messages from OTHER AI agents (ClaudIA doesn't see MarIA's messages)
       // ═══════════════════════════════════════════════════════════════════════════
 
       console.log(`[AI Agent] Loading conversation history for session: ${sessionId}`);
+      console.log(`[AI Agent] Filtering: Only messages from ${aiAgent.name} (${agentId}) + user + flow`);
 
       try {
+        // Load ALL messages (we'll filter them when building context)
         const conversationMessages = await prisma.message.findMany({
           where: { chatId: sessionId },
           orderBy: { createdAt: "asc" },
-          take: 30, // Last 30 messages (enough to capture full flow context)
+          take: 50, // Increased to capture full context
         });
 
-        console.log(`[AI Agent] Found ${conversationMessages.length} previous messages`);
+        console.log(`[AI Agent] Found ${conversationMessages.length} total messages in chat`);
 
-        // Count AI turns
-        aiTurnCount = conversationMessages.filter((msg) => msg.sender === "agent").length;
-        console.log(`[AI Agent] Current AI turn count: ${aiTurnCount}/${aiAgent.maxTurns}`);
+        // Count turns for THIS SPECIFIC AGENT (not all agents)
+        const thisAgentMessages = conversationMessages.filter(
+          (msg) => msg.sender === "agent" && msg.agentId === agentId
+        );
+        aiTurnCount = thisAgentMessages.length;
+        console.log(`[AI Agent] Messages from ${aiAgent.name}: ${aiTurnCount}/${aiAgent.maxTurns}`);
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // 📝 FORMAT CONVERSATION HISTORY FOR AI CONTEXT
+        // 📝 FORMAT CONVERSATION HISTORY FOR AI CONTEXT (PER-AGENT FILTERING)
         // ═══════════════════════════════════════════════════════════════════════════
-        // Build a summary of what has been asked and answered
-        // This helps the AI understand the conversation context
+        // Build history that THIS AGENT should see:
+        // - User messages (always included)
+        // - Flow messages (always included)
+        // - THIS agent's previous messages (included)
+        // - OTHER agents' messages (EXCLUDED - prevents topic mixing)
         // ═══════════════════════════════════════════════════════════════════════════
 
-        if (conversationMessages.length > 0) {
+        // Filter messages that THIS AGENT should see
+        const visibleMessages = conversationMessages.filter((msg) => {
+          // Always show user messages
+          if (msg.sender === "contact") return true;
+          // Always show flow messages
+          if (msg.sender === "flow") return true;
+          // Only show agent messages from THIS AGENT
+          if (msg.sender === "agent") {
+            return msg.agentId === agentId;
+          }
+          // Show system messages
+          if (msg.sender === "system") return true;
+          // Default: don't show
+          return false;
+        });
+
+        console.log(`[AI Agent] Filtered ${conversationMessages.length} messages → ${visibleMessages.length} visible to ${aiAgent.name}`);
+
+        // Count how many agent messages were filtered out
+        const otherAgentMessages = conversationMessages.filter(
+          (msg) => msg.sender === "agent" && msg.agentId && msg.agentId !== agentId
+        );
+        if (otherAgentMessages.length > 0) {
+          console.log(`[AI Agent] 🚫 Filtered out ${otherAgentMessages.length} messages from other AI agents`);
+          console.log(`[AI Agent] ${aiAgent.name} will NOT see these other agent messages (prevents topic mixing)`);
+        }
+
+        if (visibleMessages.length > 0) {
           const historyLines: string[] = [
             "",
             "═══════════════════════════════════════════════════════════",
             "📚 HISTORIAL DE CONVERSACIÓN PREVIO (IMPORTANTE - LEER)",
             "═══════════════════════════════════════════════════════════",
             "",
-            "Esta conversación ya empezó con un flow automatizado o con otro agente.",
-            "A continuación está el historial completo de lo que se ha preguntado y respondido.",
+            "Esta conversación ya empezó con un flow automatizado.",
+            "A continuación está el historial de lo que se ha preguntado y respondido.",
             "",
             "🚨 TU TRABAJO:",
             "1. LEE este historial cuidadosamente",
@@ -463,7 +548,7 @@ ${aiAgent.systemPrompt || ""}`;
             "---",
           ];
 
-          conversationMessages.forEach((msg, index) => {
+          visibleMessages.forEach((msg) => {
             let sender = "";
             if (msg.sender === "contact") {
               sender = "👤 USUARIO";
@@ -496,12 +581,13 @@ ${aiAgent.systemPrompt || ""}`;
             content: historyContext,
           });
 
-          console.log(`[AI Agent] ✅ Added conversation history context (${conversationMessages.length} messages)`);
+          console.log(`[AI Agent] ✅ Added conversation history context (${visibleMessages.length} messages visible to ${aiAgent.name})`);
           console.log(`[AI Agent] History preview:`, historyContext.substring(0, 300) + "...");
         }
 
         // Convert to OpenAI format for conversation continuation
-        const historyMessages = conversationMessages.map((msg) => ({
+        // Only include messages that THIS AGENT should see
+        const historyMessages = visibleMessages.map((msg) => ({
           role: msg.sender === "contact" ? "user" : "assistant",
           content: msg.text || "",
         }));

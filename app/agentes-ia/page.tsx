@@ -42,6 +42,9 @@ export default function AiAgentsPage() {
 
   const loadAgents = async () => {
     try {
+      // ⚠️ IMPORTANT: Always fetch agents from database via API
+      // This ensures UI displays current database values (not hard-coded)
+      // The API reads from Prisma/PostgreSQL, including maxTurns field
       const res = await fetch("/api/ai-agents");
       const data = await res.json();
       // API returns { success: true, agents: [...], count: X }
@@ -242,6 +245,7 @@ export default function AiAgentsPage() {
                     <span className="text-gray-500">Tono:</span>
                     <span className="font-medium capitalize">{agent.tone}</span>
                   </div>
+                  {/* ⚠️ Displays maxTurns from database (not hard-coded) */}
                   <div className="flex items-center gap-2">
                     <span className="text-gray-500">Max turnos:</span>
                     <span className="font-medium">{agent.maxTurns}</span>

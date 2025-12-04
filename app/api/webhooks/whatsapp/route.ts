@@ -450,6 +450,7 @@ export async function POST(request: NextRequest) {
               sender: "agent",
               textPreview: confirmationMessage,
               chatId: chat.id,
+              agentId: chat.assignedAgentId || undefined,
             });
             console.log(`[AI] ✅ Sent STOP confirmation to chat ${chat.id}`);
           } catch (error) {

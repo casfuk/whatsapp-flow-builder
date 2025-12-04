@@ -406,23 +406,29 @@ model ConversationMessage {
 }
 
 model Chat {
-  id                 String    @id @default(cuid())
-  phoneNumber        String
-  contactName        String?
-  lastMessagePreview String?
-  lastMessageAt      DateTime  @default(now())
-  unreadCount        Int       @default(0)
-  status             String    @default("open")
-  tags               String    @default("[]")
-  deviceId           String
-  isFavorite         Boolean   @default(false)
-  isResponding       Boolean   @default(false) // Prevents double AI responses during delays
-  assignedToUserId   String?
-  assignedAgentType  String?   // "AI" or "HUMAN"
-  assignedAgentId    String?   // ID of AI agent or human agent
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  messages           Message[]
+  id                    String    @id @default(cuid())
+  phoneNumber           String
+  contactName           String?
+  lastMessagePreview    String?
+  lastMessageAt         DateTime  @default(now())
+  unreadCount           Int       @default(0)
+  status                String    @default("open")
+  tags                  String    @default("[]")
+  deviceId              String
+  isFavorite            Boolean   @default(false)
+  isResponding          Boolean   @default(false) // Prevents double AI responses during delays
+  assignedToUserId      String?
+  assignedAgentType     String?   // "AI" or "HUMAN"
+  assignedAgentId       String?   // ID of AI agent or human agent (current agent)
+  lastQuestionSentAt    DateTime? // When the last AI question was sent
+  lastQuestionAttempts  Int       @default(0) // Number of times current question has been sent (max 2)
+  lastQuestionMessageId String?   // ID of the last question message sent
+  lastUserReplyAt       DateTime? // When user last replied (to detect if they responded)
+  aiDisabled            Boolean   @default(false) // If true, AI and follow-ups are completely disabled for this chat
+  perAgentTurnCount     String    @default("{}") // JSON: { "agentId": turnCount } - Tracks turns per agent separately
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  messages              Message[]
 
   @@unique([phoneNumber, deviceId])
   @@index([phoneNumber])
@@ -433,20 +439,24 @@ model Chat {
   @@index([assignedAgentId])
   @@index([lastMessageAt])
   @@index([isFavorite])
+  @@index([lastQuestionSentAt])
+  @@index([aiDisabled])
 }
 
 model Message {
   id        String   @id @default(cuid())
   chatId    String
-  sender    String
+  sender    String   // "contact", "agent", "flow", "system"
   text      String
   status    String   @default("sent")
   messageId String?
   metadata  String   @default("{}")
+  agentId   String?  // ID of the AI agent that sent this message (for agent-specific history)
   createdAt DateTime @default(now())
   chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@index([chatId])
   @@index([createdAt])
   @@index([sender])
+  @@index([agentId])
 }

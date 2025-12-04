@@ -153,6 +153,7 @@ export async function POST(
     }
 
     // Save message to database
+    // If chat is assigned to an AI agent, track the agentId for proper turn counting
     const message = await prisma.message.create({
       data: {
         chatId,
@@ -160,6 +161,7 @@ export async function POST(
         text,
         status: messageStatus,
         messageId: whatsappMessageId,
+        agentId: chat.assignedAgentType === "AI" ? chat.assignedAgentId : undefined,
       },
     });
 

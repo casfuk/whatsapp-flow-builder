@@ -35,12 +35,14 @@ export default function IntegrationsPage() {
         <h2 className="text-lg font-semibold mb-4">Facebook / Meta</h2>
 
         {!data.connected ? (
-          <a
-            href="/api/auth/facebook/start"
-            className="inline-block bg-[#1877F2] text-white px-4 py-2 rounded-lg hover:bg-[#166FE5]"
+          <button
+            onClick={() => {
+              window.location.href = '/api/v1/integrations/facebook/oauth/start';
+            }}
+            className="bg-[#1877F2] text-white px-4 py-2 rounded-lg hover:bg-[#166FE5]"
           >
             Conectar con Facebook
-          </a>
+          </button>
         ) : (
           <>
             <p className="text-sm text-green-600 mb-4">✓ Conectado</p>

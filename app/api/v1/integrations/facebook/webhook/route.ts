@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
+import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
 
 /**
  * GET /api/v1/integrations/facebook/webhook
@@ -178,6 +179,28 @@ async function processLeadgenEvent(eventData: any) {
     });
 
     console.log("[Facebook Leadgen] ✓ Contact created/updated:", contact.id);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🔔 ADMIN ALERT: Check and send admin alert for new Facebook lead
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This uses the unified admin alert system
+    // Alert will fire if this is first-ever contact OR >30 minutes since last contact
+    const adminNumber = process.env.ADMIN_ALERT_PHONE;
+    if (adminNumber) {
+      try {
+        await checkAndSendAdminAlert({
+          contact,
+          source: "facebook_lead",
+          adminNumber,
+          additionalInfo: `Form ID: ${form_id}`,
+        });
+      } catch (alertError) {
+        console.error(`[ADMIN_ALERT_ERROR] Exception in admin alert:`, alertError);
+        // Don't fail the webhook if alert fails
+      }
+    } else {
+      console.warn(`[ADMIN_ALERT] ADMIN_ALERT_PHONE not configured - skipping alert`);
+    }
 
     // Look up the page integration by page_id
     const pageIntegration = await prisma.facebookPageIntegration.findUnique({

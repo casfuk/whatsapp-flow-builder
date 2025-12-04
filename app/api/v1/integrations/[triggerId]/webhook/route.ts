@@ -5,12 +5,29 @@ import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 
 /**
+ * OPTIONS handler for CORS preflight
+ */
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
+}
+
+/**
  * Webhook endpoint for third-party integrations (Facebook Leads, etc.)
  *
  * POST /api/v1/integrations/[triggerId]/webhook
  *
  * Receives webhook payloads from external services (e.g., Facebook Lead Ads),
  * creates/updates contacts, and triggers the associated flow.
+ *
+ * Supports both JSON and URL-encoded form data.
  */
 export async function POST(
   request: NextRequest,
@@ -39,7 +56,13 @@ export async function POST(
       console.error(`[Third-Party Webhook] Trigger not found: ${triggerId}`);
       return NextResponse.json(
         { error: "Trigger not found" },
-        { status: 404 }
+        {
+          status: 404,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/json",
+          },
+        }
       );
     }
 
@@ -47,10 +70,78 @@ export async function POST(
     console.log(`[Third-Party Webhook] Flow: ${trigger.flow.name} (${trigger.flowId})`);
     console.log(`[Third-Party Webhook] Device: ${trigger.device.name} (${trigger.deviceId})`);
 
-    // 2. Read webhook payload
-    const payload = await request.json();
-    console.log(`[Third-Party Webhook] Payload received:`, JSON.stringify(payload, null, 2));
+    // 2. Read webhook payload with flexible parsing (JSON or URL-encoded)
+    const contentType = request.headers.get('content-type') || '';
+    let payload: any = {};
+
+    console.log(`[Third-Party Webhook] Content-Type: ${contentType}`);
+
+    if (contentType.includes('application/json')) {
+      console.log(`[Third-Party Webhook] Parsing as JSON...`);
+      payload = await request.json();
+    } else if (contentType.includes('application/x-www-form-urlencoded')) {
+      console.log(`[Third-Party Webhook] Parsing as URL-encoded form data...`);
+      const text = await request.text();
+      const params = new URLSearchParams(text);
+      payload = Object.fromEntries(params.entries());
+    } else {
+      console.log(`[Third-Party Webhook] Unknown content-type, attempting JSON fallback...`);
+      // Fallback: try json, but don't crash hard
+      try {
+        payload = await request.json();
+      } catch {
+        console.warn(`[Third-Party Webhook] Failed to parse payload, using empty object`);
+        payload = {};
+      }
+    }
+
+    console.log(`[Third-Party Webhook] Normalized payload:`, JSON.stringify(payload, null, 2));
     console.log(`[Third-Party Webhook] Payload keys:`, Object.keys(payload));
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🔍 FIELD MAPPING FOR FLOW BUILDER
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Extract field mapping from payload - Flow Builder REQUIRES this format
+    console.log(`[FIELD_MAPPING] ========================================`);
+    console.log(`[FIELD_MAPPING] Payload received:`, payload);
+    console.log(`[FIELD_MAPPING] Extracting fields from payload keys...`);
+
+    const fields = Object.keys(payload).map((key) => ({
+      key,
+      type: "string" // Flow Builder expects all types as "string"
+    }));
+
+    console.log(`[FIELD_MAPPING] Fields extracted:`, fields);
+    console.log(`[FIELD_MAPPING] Total fields found: ${fields.length}`);
+    console.log(`[FIELD_MAPPING] Will return fields to Flow Builder in response`);
+    console.log(`[FIELD_MAPPING] ========================================`);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 💾 SAVE PAYLOAD SAMPLE IMMEDIATELY (BEFORE VALIDATION)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This MUST happen before any validation errors (missing phone, etc.)
+    // so that Flow Builder can always see the latest payload keys
+    // (Elementor, Facebook, or any other source)
+    console.log(`[Third-Party Webhook] ========================================`);
+    console.log(`[Third-Party Webhook] Saving lastPayloadSample for trigger ${triggerId}...`);
+    console.log(`[Third-Party Webhook] Payload keys being saved:`, Object.keys(payload));
+
+    try {
+      await prisma.thirdPartyTrigger.update({
+        where: { id: trigger.id },
+        data: {
+          lastReceivedAt: new Date(),
+          lastPayloadPreview: JSON.stringify(payload).substring(0, 500),
+          lastPayloadSample: payload,
+        },
+      });
+      console.log(`[Third-Party Webhook] ✅ lastPayloadSample saved successfully`);
+      console.log(`[Third-Party Webhook] Flow Builder will now show these ${Object.keys(payload).length} fields in mapping UI`);
+    } catch (updateError) {
+      console.error(`[Third-Party Webhook] ❌ Failed to save lastPayloadSample:`, updateError);
+      // Don't fail the whole request if we can't save the sample
+    }
+    console.log(`[Third-Party Webhook] ========================================`);
 
     // 3. Extract contact data from payload using field mapping
     let fullName = null;
@@ -99,9 +190,21 @@ export async function POST(
     // Validate required fields
     if (!phoneNumber) {
       console.error(`[Third-Party Webhook] Missing phone number in payload`);
+      console.log(`[FIELD_MAPPING] Returning fields even though validation failed`);
+      console.log(`[FIELD_MAPPING] Flow Builder will still see ${fields.length} fields from this payload`);
+
       return NextResponse.json(
-        { error: "Missing phone_number in payload (no mapping configured or field not found)" },
-        { status: 400 }
+        {
+          error: "Missing phone_number in payload (no mapping configured or field not found)",
+          fields, // Include fields so Flow Builder can see them even when validation fails
+        },
+        {
+          status: 400,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/json",
+          },
+        }
       );
     }
 
@@ -187,23 +290,9 @@ export async function POST(
     console.log(`[Third-Party Webhook] ✓ Chat created/updated: ${chat.id}`);
     console.log(`[Third-Party Webhook] Chat assignedAgentType: ${chat.assignedAgentType}, assignedAgentId: ${chat.assignedAgentId}`);
 
-    // 5. Update trigger with last received data
-    console.log(`[Third-Party Webhook] Updating trigger ${trigger.id} with payload...`);
-    console.log(`[Third-Party Webhook] Payload to save:`, payload);
-    console.log(`[Third-Party Webhook] Payload keys to save:`, Object.keys(payload));
-
-    const updatedTrigger = await prisma.thirdPartyTrigger.update({
-      where: { id: trigger.id },
-      data: {
-        lastReceivedAt: new Date(),
-        lastPayloadPreview: JSON.stringify(payload).substring(0, 500),
-        lastPayloadSample: payload,
-      },
-    });
-
-    console.log(`[Third-Party Webhook] ✓ Trigger updated successfully`);
-    console.log(`[Third-Party Webhook] Saved lastPayloadSample keys:`,
-      updatedTrigger.lastPayloadSample ? Object.keys(updatedTrigger.lastPayloadSample as any) : 'null');
+    // Note: lastPayloadSample was already saved immediately after payload parsing
+    // (before validation) so that Flow Builder always has the latest field keys
+    // even if validation fails (e.g., missing phone number)
 
     // 6. Check if runOncePerContact is enabled and contact already triggered
     if (trigger.runOncePerContact) {
@@ -220,13 +309,26 @@ export async function POST(
       if (existingExecution) {
         console.log(`[Third-Party Webhook] ⚠ Contact already triggered this flow (runOncePerContact enabled)`);
         console.log(`[Third-Party Webhook] Previous execution: ${existingExecution.createdAt}`);
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "runOncePerContact_already_triggered",
-          contactId: contact.id,
-          previouslyTriggeredAt: existingExecution.createdAt,
-        });
+
+        console.log(`[FIELD_MAPPING] Returning fields to Flow Builder (skipped response)...`);
+        console.log(`[FIELD_MAPPING] Response will include ${fields.length} fields`);
+
+        return NextResponse.json(
+          {
+            ok: true,
+            skipped: true,
+            reason: "runOncePerContact_already_triggered",
+            contactId: contact.id,
+            previouslyTriggeredAt: existingExecution.createdAt,
+            fields, // Required for Flow Builder to detect field mapping
+          },
+          {
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Content-Type": "application/json",
+            },
+          }
+        );
       }
     }
 
@@ -269,11 +371,29 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({
+    console.log(`[FIELD_MAPPING] Returning fields to Flow Builder (success response)...`);
+    console.log(`[FIELD_MAPPING] Response will include ${fields.length} fields`);
+    console.log(`[FIELD_MAPPING] Final response format:`, {
       ok: true,
       contactId: contact.id,
       flowId: trigger.flowId,
+      fields: fields,
     });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        contactId: contact.id,
+        flowId: trigger.flowId,
+        fields, // Required for Flow Builder to detect field mapping
+      },
+      {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+      }
+    );
   } catch (error: any) {
     console.error(`[Third-Party Webhook] Error:`, error);
     return NextResponse.json(
@@ -281,7 +401,13 @@ export async function POST(
         error: "Internal error",
         message: error.message || "Unknown error",
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 }
@@ -598,6 +724,7 @@ async function executeFlowForContact({
                 sender: "agent",
                 textPreview: aiMessage,
                 chatId: chat.id,
+                agentId: aiAgent.id,
               });
 
               console.log(`[Flow Execution]   ✓ AI greeting sent successfully to ${phoneNumber}`);

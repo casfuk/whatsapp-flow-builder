@@ -8,6 +8,7 @@ interface SendAndPersistMessageParams {
   sender: "agent" | "flow" | "contact";
   textPreview?: string;
   chatId?: string;
+  agentId?: string; // ID of AI agent that sent this message (for agent-specific history)
 }
 
 /**
@@ -23,6 +24,7 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
     sender,
     textPreview,
     chatId: providedChatId,
+    agentId, // Extract agentId for per-agent tracking
   } = params;
 
   console.log("[WhatsApp Message Service] Sending and persisting message", {
@@ -225,23 +227,55 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
       text: textPreview || payload.text?.body || `[${type}]`,
       status: "sent",
       messageId: whatsappMessageId,
+      agentId: agentId || null, // ✅ Track which AI agent sent this message
       metadata: JSON.stringify({
         type,
         payload,
         sender,
         sentVia: "flow",
+        agentId: agentId || undefined,
       }),
     },
   });
 
-  // 7) Update chat's last message
-  await prisma.chat.update({
-    where: { id: chat.id },
-    data: {
-      lastMessagePreview: textPreview || payload.text?.body || `[${type}]`,
-      lastMessageAt: new Date(),
-    },
-  });
+  // 7) Update chat's last message and per-agent turn count
+  if (sender === "agent" && agentId) {
+    // Increment per-agent turn count
+    const currentChat = await prisma.chat.findUnique({
+      where: { id: chat.id },
+      select: { perAgentTurnCount: true },
+    });
+
+    let perAgentTurnCount: Record<string, number> = {};
+    try {
+      perAgentTurnCount = JSON.parse(currentChat?.perAgentTurnCount || "{}");
+    } catch (e) {
+      console.warn("[WhatsApp Message Service] Failed to parse perAgentTurnCount");
+    }
+
+    // Increment count for this agent
+    perAgentTurnCount[agentId] = (perAgentTurnCount[agentId] || 0) + 1;
+
+    console.log(`[WhatsApp Message Service] ✅ Updated turn count for agent ${agentId}: ${perAgentTurnCount[agentId]}`);
+
+    await prisma.chat.update({
+      where: { id: chat.id },
+      data: {
+        lastMessagePreview: textPreview || payload.text?.body || `[${type}]`,
+        lastMessageAt: new Date(),
+        perAgentTurnCount: JSON.stringify(perAgentTurnCount), // Update per-agent turn count
+      },
+    });
+  } else {
+    // Regular update without turn count
+    await prisma.chat.update({
+      where: { id: chat.id },
+      data: {
+        lastMessagePreview: textPreview || payload.text?.body || `[${type}]`,
+        lastMessageAt: new Date(),
+      },
+    });
+  }
 
   console.log("[WhatsApp Message Service] ✓ Message sent and persisted");
 
