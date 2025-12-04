@@ -91,7 +91,8 @@ export default function AiAgentsPage() {
       return;
     }
 
-    if (formData.maxTurns < 1 || formData.maxTurns > 20) {
+    // Only validate maxTurns for new agents (not editable for existing)
+    if (!editingAgent && (formData.maxTurns < 1 || formData.maxTurns > 20)) {
       alert("El máximo de turnos debe estar entre 1 y 20");
       return;
     }
@@ -103,10 +104,21 @@ export default function AiAgentsPage() {
         : "/api/ai-agents";
       const method = editingAgent ? "PUT" : "POST";
 
+      // When editing, exclude read-only fields (goal, tone, language, maxTurns)
+      // These are controlled by backend and should not be changed via UI
+      const payload = editingAgent
+        ? {
+            name: formData.name,
+            description: formData.description,
+            systemPrompt: formData.systemPrompt,
+            isActive: editingAgent.isActive,
+          }
+        : formData;
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -238,21 +250,21 @@ export default function AiAgentsPage() {
 
                 <div className="space-y-2 text-sm mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Idioma:</span>
+                    <span className="text-gray-500">Idioma (backend):</span>
                     <span className="font-medium">{agent.language.toUpperCase()}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Tono:</span>
+                    <span className="text-gray-500">Tono (backend):</span>
                     <span className="font-medium capitalize">{agent.tone}</span>
                   </div>
-                  {/* ⚠️ Displays maxTurns from database (not hard-coded) */}
+                  {/* ⚠️ All values displayed are from database, not hard-coded */}
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Max turnos:</span>
+                    <span className="text-gray-500">Max turnos (backend):</span>
                     <span className="font-medium">{agent.maxTurns}</span>
                   </div>
                   {agent.goal && (
                     <div>
-                      <span className="text-gray-500">Objetivo:</span>
+                      <span className="text-gray-500">Objetivo (backend):</span>
                       <p className="text-gray-700 mt-1">{agent.goal}</p>
                     </div>
                   )}
@@ -319,14 +331,15 @@ export default function AiAgentsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Idioma
+                      Idioma {editingAgent && <span className="text-xs text-gray-500">(desde backend, no editable)</span>}
                     </label>
                     <select
                       value={formData.language}
                       onChange={(e) =>
                         setFormData({ ...formData, language: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
+                      disabled={!!editingAgent}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="es">Español</option>
                       <option value="en">English</option>
@@ -337,14 +350,15 @@ export default function AiAgentsPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tono
+                      Tono {editingAgent && <span className="text-xs text-gray-500">(desde backend, no editable)</span>}
                     </label>
                     <select
                       value={formData.tone}
                       onChange={(e) =>
                         setFormData({ ...formData, tone: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
+                      disabled={!!editingAgent}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="professional">Profesional</option>
                       <option value="friendly">Amigable</option>
@@ -356,15 +370,16 @@ export default function AiAgentsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Objetivo del agente
+                    Objetivo del agente {editingAgent && <span className="text-xs text-gray-500">(desde backend, no editable)</span>}
                   </label>
                   <textarea
                     value={formData.goal}
                     onChange={(e) =>
                       setFormData({ ...formData, goal: e.target.value })
                     }
+                    disabled={!!editingAgent}
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] resize-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                     placeholder="Ej: Ayudar a los clientes con preguntas sobre productos"
                   />
                 </div>
@@ -389,7 +404,7 @@ export default function AiAgentsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Máximo de turnos antes de derivar a humano
+                    Máximo de turnos antes de derivar a humano {editingAgent && <span className="text-xs text-gray-500">(controlado por backend, no editable)</span>}
                   </label>
                   <input
                     type="number"
@@ -400,12 +415,15 @@ export default function AiAgentsPage() {
                         maxTurns: parseInt(e.target.value),
                       })
                     }
+                    disabled={!!editingAgent}
                     min="1"
                     max="20"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA]"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Después de este número de mensajes, la conversación se derivará automáticamente a un humano (máximo: 20)
+                    {editingAgent
+                      ? "Valor actual desde base de datos. Para cambiarlo, contacta al administrador del sistema."
+                      : "Después de este número de mensajes, la conversación se derivará automáticamente a un humano (máximo: 20)"}
                   </p>
                 </div>
               </div>
