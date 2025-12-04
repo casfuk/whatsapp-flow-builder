@@ -4,6 +4,7 @@ import { FlowEngine } from "@/lib/runtime-engine";
 import { sendWhatsAppMessage, sendOwnerNotification, sendNewLeadNotification, sendTypingIndicator } from "@/lib/whatsapp-sender";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
+import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🧠 HUMAN-LIKE DELAY SIMULATION
@@ -366,7 +367,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Save the message
-        await prisma.message.create({
+        const inboundMessage = await prisma.message.create({
           data: {
             chatId: chat.id,
             sender: "contact",
@@ -380,15 +381,93 @@ export async function POST(request: NextRequest) {
         console.log(`[Webhook] Message saved to database with metadata:`, messageMetadata);
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // ℹ️ NOTE: Owner/Lead notifications are now sent when FLOWS START
+        // 🔔 ADMIN ALERT: Check and send admin alert for new conversation
         // ═══════════════════════════════════════════════════════════════════════════
-        // We no longer check "first message only" - notifications are sent every time
-        // a flow is triggered (see sendNewLeadNotification below in flow execution).
-        // This ensures David gets notified for ALL flow starts, not just first messages.
+        // This uses the unified admin alert system that works across ALL entry points
+        // Alert will fire if this is first-ever contact OR >30 minutes since last contact
+        const adminNumber = process.env.ADMIN_ALERT_PHONE;
+        if (adminNumber) {
+          // Fire alert synchronously to ensure it completes and we can see errors
+          try {
+            await checkAndSendAdminAlert({
+              contact,
+              source: "whatsapp",
+              adminNumber,
+            });
+          } catch (alertError) {
+            console.error(`[ADMIN_ALERT_ERROR] Exception in admin alert:`, alertError);
+            // Don't fail the webhook if alert fails
+          }
+        } else {
+          console.warn(`[ADMIN_ALERT] ADMIN_ALERT_PHONE not configured - skipping alert`);
+        }
+
         // ═══════════════════════════════════════════════════════════════════════════
+        // 🔄 TRACK USER REPLY FOR FOLLOW-UP SYSTEM
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Update lastUserReplyAt to indicate user responded
+        // Reset follow-up attempt counter since user replied
+        await prisma.chat.update({
+          where: { id: chat.id },
+          data: {
+            lastUserReplyAt: new Date(),
+            lastQuestionAttempts: 0, // Reset attempts since user replied
+          },
+        });
+        console.log(`[Webhook] Updated lastUserReplyAt for chat ${chat.id}`);
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 🛑 STOP KEYWORD DETECTION
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Check if user sent a STOP keyword to disable AI
+        const normalizedText = messageText.trim().toLowerCase();
+        const STOP_KEYWORDS = ['stop', 'para', 'basta', 'gracias', 'gracias ya'];
+        const isStopKeyword = STOP_KEYWORDS.some(keyword => normalizedText === keyword);
+
+        if (isStopKeyword && !chat.aiDisabled) {
+          console.log(`[AI] 🛑 STOP keyword detected ("${messageText}") - disabling AI for chat ${chat.id}`);
+
+          // Disable AI and reset follow-up tracking
+          await prisma.chat.update({
+            where: { id: chat.id },
+            data: {
+              aiDisabled: true,
+              lastQuestionSentAt: null,
+              lastQuestionAttempts: 0,
+              lastQuestionMessageId: null,
+            },
+          });
+
+          // Send confirmation message
+          const confirmationMessage = "Perfecto, dejo de enviarte mensajes automáticos. Si necesitas algo más, escribe y te atendemos en persona. 🙌";
+
+          try {
+            await sendAndPersistMessage({
+              deviceId: device.id,
+              toPhoneNumber: from,
+              type: "text",
+              payload: { text: { body: confirmationMessage } },
+              sender: "agent",
+              textPreview: confirmationMessage,
+              chatId: chat.id,
+            });
+            console.log(`[AI] ✅ Sent STOP confirmation to chat ${chat.id}`);
+          } catch (error) {
+            console.error(`[AI] ❌ Failed to send STOP confirmation:`, error);
+          }
+
+          // Early return - don't process AI logic
+          return NextResponse.json({ status: "ai_disabled" });
+        }
+
+        // Check if AI is disabled for this chat
+        if (chat.aiDisabled) {
+          console.log(`[AI] ⏭️ Chat ${chat.id} has AI disabled - skipping AI processing`);
+          // Continue to flow processing below (if any), but skip AI agent logic
+        }
 
         // Check if this chat is assigned to an AI agent
-        if (chat.assignedAgentType === "AI" && chat.assignedAgentId) {
+        if (chat.assignedAgentType === "AI" && chat.assignedAgentId && !chat.aiDisabled) {
           console.log(`[AI Agent] ========================================`);
           console.log(`[AI Agent] 🤖 Chat assigned to AI Agent: ${chat.assignedAgentId}`);
           console.log(`[AI Agent] 💬 Incoming user message: "${messageText}"`);
@@ -500,6 +579,7 @@ export async function POST(request: NextRequest) {
                   sender: "agent",
                   textPreview: part,
                   chatId: chat.id,
+                  agentId: aiAgent?.id,
                 });
 
                 console.log(`[AI Agent] ✅ Part ${i + 1}/${messageParts.length} sent successfully`);
@@ -511,6 +591,29 @@ export async function POST(request: NextRequest) {
               }
 
               console.log(`[AI Agent] ✅ All ${messageParts.length} message part(s) sent successfully to ${from}`);
+
+              // ═══════════════════════════════════════════════════════════════════════════
+              // 🔄 TRACK AI QUESTION FOR FOLLOW-UP SYSTEM
+              // ═══════════════════════════════════════════════════════════════════════════
+              // Only track if this is a new question (attempts is 0, meaning user replied or first question)
+              const currentChat = await prisma.chat.findUnique({
+                where: { id: chat.id },
+                select: { lastQuestionAttempts: true },
+              });
+
+              if (currentChat && currentChat.lastQuestionAttempts === 0) {
+                // This is a new question (not a follow-up)
+                await prisma.chat.update({
+                  where: { id: chat.id },
+                  data: {
+                    lastQuestionSentAt: new Date(),
+                    lastQuestionAttempts: 1, // First attempt
+                    lastQuestionMessageId: null, // Will be set by message service if needed
+                  },
+                });
+                console.log(`[AI Agent] 📝 Tracked new question for follow-up system (attempt 1)`);
+              }
+
               console.log(`[AI Agent] ========================================`);
             }
           } catch (aiError: any) {
@@ -628,19 +731,40 @@ export async function POST(request: NextRequest) {
             const part = messageParts[i];
             console.log(`[Webhook] 📤 Sending part ${i + 1}/${messageParts.length}: "${part.substring(0, 50)}..."`);
 
-            await sendWhatsAppMessage({
-              to: from,
-              message: part,
+            // Get AI agent details for tracking
+            const aiAgent = await prisma.aiAgent.findUnique({
+              where: { id: existingSession.assigneeId },
+              select: { id: true },
             });
 
-            // Log each message part
-            await prisma.messageLog.create({
-              data: {
-                phone: from,
-                message: part,
-                status: "sent",
+            // Get or find chat for this session
+            const sessionChat = await prisma.chat.findFirst({
+              where: {
+                phoneNumber: from,
+                deviceId: device?.id,
               },
+              select: { id: true },
             });
+
+            if (!device || !sessionChat) {
+              console.error(`[Webhook] Missing device or chat for message persistence`);
+              // Fallback to old method
+              await sendWhatsAppMessage({
+                to: from,
+                message: part,
+              });
+            } else {
+              await sendAndPersistMessage({
+                deviceId: device.id,
+                toPhoneNumber: from,
+                type: "text",
+                payload: { text: { body: part } },
+                sender: "agent",
+                textPreview: part,
+                chatId: sessionChat.id,
+                agentId: aiAgent?.id,
+              });
+            }
 
             console.log(`[Webhook] ✅ Part ${i + 1}/${messageParts.length} sent`);
 
@@ -1342,18 +1466,25 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
               const part = messageParts[i];
               console.log(`[Flow Execution]   → Sending part ${i + 1}/${messageParts.length}`);
 
-              const success = await sendWhatsAppMessage({
-                to: phoneNumber,
-                message: part,
-              });
-
-              await prisma.messageLog.create({
-                data: {
-                  phone: phoneNumber,
+              if (!deviceId) {
+                console.error(`[Flow Execution]   ✗ No deviceId available, cannot persist message`);
+                // Fallback to old method
+                await sendWhatsAppMessage({
+                  to: phoneNumber,
                   message: part,
-                  status: success ? "sent" : "failed",
-                },
-              });
+                });
+              } else {
+                await sendAndPersistMessage({
+                  deviceId,
+                  toPhoneNumber: phoneNumber,
+                  type: "text",
+                  payload: { text: { body: part } },
+                  sender: "agent",
+                  textPreview: part,
+                  chatId: chat.id,
+                  agentId: action.assigneeId,
+                });
+              }
 
               // Small delay between messages
               if (i < messageParts.length - 1) {
