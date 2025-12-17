@@ -43,10 +43,16 @@ export async function GET(request: NextRequest) {
   // Verify token should match env variable or a configured value
   const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || "funnelchat_verify_token";
 
+  console.log("[Webhook Verification] Mode:", mode);
+  console.log("[Webhook Verification] Received token:", token);
+  console.log("[Webhook Verification] Expected token:", VERIFY_TOKEN);
+  console.log("[Webhook Verification] Tokens match:", token === VERIFY_TOKEN);
+
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Webhook verified");
+    console.log("Webhook verified successfully");
     return new NextResponse(challenge, { status: 200 });
   } else {
+    console.log("Webhook verification failed");
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 }
