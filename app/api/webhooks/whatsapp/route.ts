@@ -43,9 +43,15 @@ export async function GET(request: NextRequest) {
   // Verify token should match env variable or a configured value
   const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || "funnelchat_verify_token";
 
+  // Never log token values - only where the expected token comes from and whether it matches
+  const tokenSource = process.env.WEBHOOK_VERIFY_TOKEN
+    ? "WEBHOOK_VERIFY_TOKEN"
+    : process.env.WHATSAPP_VERIFY_TOKEN
+      ? "WHATSAPP_VERIFY_TOKEN"
+      : "hardcoded default";
   console.log("[Webhook Verification] Mode:", mode);
-  console.log("[Webhook Verification] Received token:", token);
-  console.log("[Webhook Verification] Expected token:", VERIFY_TOKEN);
+  console.log("[Webhook Verification] Received token present:", !!token, "length:", token?.length ?? 0);
+  console.log("[Webhook Verification] Expected token source:", tokenSource, "length:", VERIFY_TOKEN.length);
   console.log("[Webhook Verification] Tokens match:", token === VERIFY_TOKEN);
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
