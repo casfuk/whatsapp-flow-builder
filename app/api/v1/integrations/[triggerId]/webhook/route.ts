@@ -4,6 +4,7 @@ import { FlowEngine } from "@/lib/runtime-engine";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 import { safeJson } from "@/lib/safe-response";
+import { internalAuthHeaders } from "@/lib/auth/session";
 
 /**
  * OPTIONS handler for CORS preflight
@@ -734,7 +735,7 @@ async function executeFlowForContact({
               // Call AI endpoint to generate initial greeting
               const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/ai-agent`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...(await internalAuthHeaders()) },
                 body: JSON.stringify({
                   agentId: aiAgent.id,
                   userMessage: greetingPrompt,

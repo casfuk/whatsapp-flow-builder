@@ -1,28 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { safeJson } from "@/lib/safe-response";
+import { handleMetaVerification, readVerifiedMetaJson } from "@/lib/meta-webhook";
 
 // GET: Webhook verification
 export async function GET(request: NextRequest) {
-  const mode = request.nextUrl.searchParams.get("hub.mode");
-  const token = request.nextUrl.searchParams.get("hub.verify_token");
-  const challenge = request.nextUrl.searchParams.get("hub.challenge");
-
-  const verifyToken = process.env.WEBHOOK_VERIFY_TOKEN;
-
-  if (mode === "subscribe" && token === verifyToken) {
-    console.log("Generic webhook verified");
-    return new NextResponse(challenge, { status: 200 });
-  }
-
-  return safeJson({ error: "Verification failed" }, { status: 403 });
+  return handleMetaVerification(request, [process.env.WEBHOOK_VERIFY_TOKEN, process.env.WHATSAPP_VERIFY_TOKEN], "[Generic Webhook]");
 }
 
 // POST: Receive webhook events
 export async function POST(request: NextRequest) {
+  // Reject anything not signed by Meta, checked on the raw body before parsing
+  const verified = await readVerifiedMetaJson(request, "[Generic Webhook]");
+  if (!verified.ok) return verified.response;
+
   let body: unknown = null;
 
   try {
-    body = await request.json();
+    body = verified.body;
   } catch {
     body = null;
   }

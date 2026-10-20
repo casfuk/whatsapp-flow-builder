@@ -1,31 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-sender";
 import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
 import { safeJson } from "@/lib/safe-response";
+import { handleMetaVerification, readVerifiedMetaJson } from "@/lib/meta-webhook";
 
 // GET: Webhook verification (required by Meta)
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const mode = searchParams.get("hub.mode");
-  const token = searchParams.get("hub.verify_token");
-  const challenge = searchParams.get("hub.challenge");
-
-  const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN || "funnelchat_fb_verify";
-
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Facebook webhook verified");
-    return new NextResponse(challenge, { status: 200 });
-  } else {
-    return safeJson({ error: "Forbidden" }, { status: 403 });
-  }
+  return handleMetaVerification(request, [process.env.FACEBOOK_VERIFY_TOKEN], "[Facebook Lead Webhook]");
 }
 
 // POST: Handle incoming lead data
 export async function POST(request: NextRequest) {
+  // Reject anything not signed by Meta, checked on the raw body before parsing
+  const verified = await readVerifiedMetaJson(request, "[Facebook Lead Webhook]");
+  if (!verified.ok) return verified.response;
+
   try {
-    const body = await request.json();
+    const body = verified.body;
 
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];

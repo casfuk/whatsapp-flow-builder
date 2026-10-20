@@ -52,6 +52,11 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
     }
   };
 
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    window.location.href = "/login";
+  };
+
   const toggleMenu = (menuKey: string) => {
     const newExpanded = new Set(expandedMenus);
     if (newExpanded.has(menuKey)) {
@@ -363,6 +368,22 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
               strokeLinejoin="round"
               strokeWidth={2}
               d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
+            />
+          </svg>
+        </button>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="mt-auto p-3 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-700"
+          title="Cerrar sesión"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
             />
           </svg>
         </button>

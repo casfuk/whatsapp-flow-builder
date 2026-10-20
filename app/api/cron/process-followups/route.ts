@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // Fail closed: without a configured CRON_SECRET nobody can trigger the job
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
       console.error("[Cron] Unauthorized follow-up processing attempt");
       return safeJson(
         { error: "Unauthorized" },

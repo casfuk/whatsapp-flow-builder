@@ -1,33 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runFlowForIncomingMessage } from "@/lib/flowEngine";
 import { safeJson } from "@/lib/safe-response";
+import { handleMetaVerification, readVerifiedMetaJson } from "@/lib/meta-webhook";
 
 // GET endpoint for webhook verification (Meta setup)
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const mode = searchParams.get("hub.mode");
-  const token = searchParams.get("hub.verify_token");
-  const challenge = searchParams.get("hub.challenge");
-
-  const verifyToken = process.env.WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN;
-
-  if (mode === "subscribe" && token === verifyToken) {
-    console.log("Webhook verified successfully");
-    return new NextResponse(challenge, { status: 200 });
-  } else {
-    console.error("Webhook verification failed");
-    return safeJson(
-      { error: "Verification failed" },
-      { status: 403 }
-    );
-  }
+  return handleMetaVerification(request, [process.env.WEBHOOK_VERIFY_TOKEN, process.env.WHATSAPP_VERIFY_TOKEN], "[WhatsApp Webhook (legacy)]");
 }
 
 // POST endpoint for receiving messages from WhatsApp
 export async function POST(request: NextRequest) {
+  // Reject anything not signed by Meta, checked on the raw body before parsing
+  const verified = await readVerifiedMetaJson(request, "[WhatsApp Webhook (legacy)]");
+  if (!verified.ok) return verified.response;
+
   try {
-    const body = await request.json();
+    const body = verified.body;
 
     console.log("Incoming webhook:", JSON.stringify(body, null, 2));
 

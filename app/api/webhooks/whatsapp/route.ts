@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
 import { sendWhatsAppMessage, sendOwnerNotification, sendNewLeadNotification, sendTypingIndicator } from "@/lib/whatsapp-sender";
@@ -6,6 +6,8 @@ import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
 import { safeJson } from "@/lib/safe-response";
+import { internalAuthHeaders } from "@/lib/auth/session";
+import { handleMetaVerification, readVerifiedMetaJson } from "@/lib/meta-webhook";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🧠 HUMAN-LIKE DELAY SIMULATION
@@ -36,36 +38,15 @@ async function simulateHumanDelay(): Promise<void> {
 
 // GET: Webhook verification (required by Meta)
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const mode = searchParams.get("hub.mode");
-  const token = searchParams.get("hub.verify_token");
-  const challenge = searchParams.get("hub.challenge");
-
-  // Verify token should match env variable or a configured value
-  const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || "funnelchat_verify_token";
-
-  // Never log token values - only where the expected token comes from and whether it matches
-  const tokenSource = process.env.WEBHOOK_VERIFY_TOKEN
-    ? "WEBHOOK_VERIFY_TOKEN"
-    : process.env.WHATSAPP_VERIFY_TOKEN
-      ? "WHATSAPP_VERIFY_TOKEN"
-      : "hardcoded default";
-  console.log("[Webhook Verification] Mode:", mode);
-  console.log("[Webhook Verification] Received token present:", !!token, "length:", token?.length ?? 0);
-  console.log("[Webhook Verification] Expected token source:", tokenSource, "length:", VERIFY_TOKEN.length);
-  console.log("[Webhook Verification] Tokens match:", token === VERIFY_TOKEN);
-
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Webhook verified successfully");
-    return new NextResponse(challenge, { status: 200 });
-  } else {
-    console.log("Webhook verification failed");
-    return safeJson({ error: "Forbidden" }, { status: 403 });
-  }
+  return handleMetaVerification(request, [process.env.WEBHOOK_VERIFY_TOKEN, process.env.WHATSAPP_VERIFY_TOKEN], "[Webhook]");
 }
 
 // POST: Handle incoming messages
 export async function POST(request: NextRequest) {
+  // Reject anything not signed by Meta, checked on the raw body before parsing
+  const verified = await readVerifiedMetaJson(request, "[Webhook]");
+  if (!verified.ok) return verified.response;
+
   console.log("[Webhook] *** NEW REQUEST TO /api/webhooks/whatsapp ***");
 
   // Check required environment variables
@@ -85,7 +66,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = verified.body;
 
     console.log("[Webhook] Raw body:", JSON.stringify(body, null, 2));
 
@@ -537,7 +518,7 @@ export async function POST(request: NextRequest) {
 
               const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/ai-agent`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...(await internalAuthHeaders()) },
                 body: JSON.stringify({
                   agentId: aiAgent.id,
                   userMessage: messageText,
@@ -702,6 +683,7 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              ...(await internalAuthHeaders()),
             },
             body: JSON.stringify({
               agentId: existingSession.assigneeId,
@@ -1437,6 +1419,7 @@ async function executeFlow(flowId: string, phoneNumber: string, initialMessage: 
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                ...(await internalAuthHeaders()),
               },
               body: JSON.stringify({
                 agentId: action.assigneeId,

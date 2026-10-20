@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
 import { safeJson } from "@/lib/safe-response";
+import { handleMetaVerification, readVerifiedMetaJson } from "@/lib/meta-webhook";
 
 /**
  * GET /api/v1/integrations/facebook/webhook
@@ -11,24 +12,7 @@ import { safeJson } from "@/lib/safe-response";
  * Meta will send a GET request with hub.mode, hub.verify_token, and hub.challenge
  */
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const mode = searchParams.get("hub.mode");
-  const token = searchParams.get("hub.verify_token");
-  const challenge = searchParams.get("hub.challenge");
-
-  console.log("[Facebook Webhook] GET verification request received");
-  console.log("[Facebook Webhook] Mode:", mode);
-  console.log("[Facebook Webhook] Token:", token ? "***" : "missing");
-  console.log("[Facebook Webhook] Challenge:", challenge);
-
-  if (mode === "subscribe" && token === process.env.FACEBOOK_VERIFY_TOKEN) {
-    console.log("[Facebook Webhook] ✓ Verification successful, returning challenge");
-    // IMPORTANT: return the raw challenge string and 200
-    return new Response(challenge ?? "", { status: 200 });
-  }
-
-  console.error("[Facebook Webhook] ✗ Verification failed");
-  return new Response("Forbidden", { status: 403 });
+  return handleMetaVerification(req, [process.env.FACEBOOK_VERIFY_TOKEN], "[Facebook Webhook]");
 }
 
 /**
@@ -38,8 +22,12 @@ export async function GET(req: NextRequest) {
  * Fetches lead data from Graph API and triggers configured flows
  */
 export async function POST(request: NextRequest) {
+  // Reject anything not signed by Meta, checked on the raw body before parsing
+  const verified = await readVerifiedMetaJson(request, "[Facebook Webhook]");
+  if (!verified.ok) return verified.response;
+
   try {
-    const body = await request.json();
+    const body = verified.body;
     console.log("[Facebook Webhook] POST event received");
     console.log("[Facebook Webhook] Body:", JSON.stringify(body, null, 2));
 
