@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { put } from "@vercel/blob";
+import { safeJson } from "@/lib/safe-response";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File | null;
 
     if (!file) {
-      return NextResponse.json(
+      return safeJson(
         { error: "No file received" },
         { status: 400 }
       );
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
     console.log(`[/api/upload] Public URL: ${blob.url}`);
     console.log(`[/api/upload] ========================================`);
 
-    return NextResponse.json(
+    return safeJson(
       {
         url: blob.url,
         fileName: originalFileName, // Return original name for display
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
     console.error("[/api/upload] ❌ Upload error:", err);
     console.error("[/api/upload] Error message:", err.message);
     console.error("[/api/upload] Error stack:", err.stack);
-    return NextResponse.json(
+    return safeJson(
       { error: "Upload failed", details: err.message },
       { status: 500 }
     );

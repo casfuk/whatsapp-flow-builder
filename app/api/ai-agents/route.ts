@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * GET /api/ai-agents
@@ -30,14 +31,14 @@ export async function GET(request: NextRequest) {
 
     console.log(`[AI Agents API] Found ${agents.length} agent(s)`);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       agents,
       count: agents.length,
     });
   } catch (error) {
     console.error("[AI Agents API] Error fetching agents:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         success: false,
         error: "Failed to fetch AI agents",
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!name || !systemPrompt) {
-      return NextResponse.json(
+      return safeJson(
         {
           success: false,
           error: "Missing required fields: name and systemPrompt are required",
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (maxTurns && (maxTurns < 1 || maxTurns > 20)) {
-      return NextResponse.json(
+      return safeJson(
         {
           success: false,
           error: "maxTurns must be between 1 and 20",
@@ -104,13 +105,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`[AI Agents API] Created agent: ${agent.id}`);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       agent,
     });
   } catch (error) {
     console.error("[AI Agents API] Error creating agent:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         success: false,
         error: "Failed to create AI agent",

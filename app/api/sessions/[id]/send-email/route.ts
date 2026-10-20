@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { safeJson } from "@/lib/safe-response";
 
 export async function POST(
   request: NextRequest,
@@ -16,7 +17,7 @@ export async function POST(
     message,
   });
 
-  return NextResponse.json({
+  return safeJson({
     ok: true,
     sessionId: id,
     to,

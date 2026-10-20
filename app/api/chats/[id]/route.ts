@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 // DELETE: Delete a chat and all its messages
 export async function DELETE(
@@ -25,13 +26,13 @@ export async function DELETE(
 
     console.log(`[DELETE /api/chats/${chatId}] ✅ Chat deleted successfully`);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       deletedMessages: deletedMessages.count,
     });
   } catch (error) {
     console.error("[DELETE /api/chats/[id]] Error:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to delete chat" },
       { status: 500 }
     );

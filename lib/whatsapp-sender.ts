@@ -130,7 +130,7 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
     console.log(`[WhatsApp Sender] URL: ${apiUrl}`);
     console.log(`[WhatsApp Sender] Method: POST`);
     console.log(`[WhatsApp Sender] Headers:`, {
-      Authorization: `Bearer ${config.accessToken.substring(0, 10)}...${config.accessToken.substring(config.accessToken.length - 4)}`,
+      Authorization: "Bearer [redacted]",
       "Content-Type": "application/json",
     });
     console.log(`[WhatsApp Sender] Body:`, JSON.stringify(requestBody, null, 2));

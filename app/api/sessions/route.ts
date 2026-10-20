@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     phoneNumber,
   });
 
-  return NextResponse.json({
+  return safeJson({
     ok: true,
     sessions: [],
     note: "Session listing stub. DB session model not implemented yet.",

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * GET /api/v1/integrations/facebook/webhook
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     // Facebook sends an array of entries
     if (!body.entry || !Array.isArray(body.entry)) {
       console.log("[Facebook Webhook] No entries in webhook payload");
-      return NextResponse.json({ success: true });
+      return safeJson({ success: true });
     }
 
     // Process each entry
@@ -61,11 +62,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Always return 200 OK to acknowledge receipt
-    return NextResponse.json({ success: true });
+    return safeJson({ success: true });
   } catch (error) {
     console.error("[Facebook Webhook] POST error:", error);
     // Still return 200 to prevent Meta from retrying
-    return NextResponse.json({ success: true });
+    return safeJson({ success: true });
   }
 }
 

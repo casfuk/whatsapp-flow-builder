@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET(
   request: NextRequest,
@@ -9,7 +10,7 @@ export async function GET(
   // TEMP: not loading from DB yet
   console.log("Fetch session called for id:", id);
 
-  return NextResponse.json({
+  return safeJson({
     ok: true,
     sessionId: id,
     message: "Session loading via stub. DB session model not implemented yet.",

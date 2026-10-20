@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function POST() {
   try {
@@ -44,7 +44,7 @@ export async function POST() {
       }
     }
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       message: deletedDevices.length > 0
         ? `Deleted ${deletedDevices.length} duplicate device(s)`
@@ -53,7 +53,7 @@ export async function POST() {
     });
   } catch (error) {
     console.error("Failed to cleanup duplicates:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to cleanup duplicates" },
       { status: 500 }
     );

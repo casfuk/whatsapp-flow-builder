@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 // GET /api/mass-sends - List all mass sends
 export async function GET(request: NextRequest) {
@@ -21,10 +22,10 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(massSends);
+    return safeJson(massSends);
   } catch (error) {
     console.error("Failed to fetch mass sends:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch mass sends" },
       { status: 500 }
     );
@@ -55,14 +56,14 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!name || !deviceId || !messageBody) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Missing required fields: name, deviceId, body" },
         { status: 400 }
       );
     }
 
     if (sendOption === "SCHEDULED" && !scheduledAt) {
-      return NextResponse.json(
+      return safeJson(
         { error: "scheduledAt is required when sendOption is SCHEDULED" },
         { status: 400 }
       );
@@ -99,10 +100,10 @@ export async function POST(request: NextRequest) {
     // TODO: If sendOption is NOW, trigger background job to start sending immediately
     // TODO: If sendOption is SCHEDULED, background worker should pick it up at scheduled time
 
-    return NextResponse.json(massSend, { status: 201 });
+    return safeJson(massSend, { status: 201 });
   } catch (error) {
     console.error("Failed to create mass send:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to create mass send" },
       { status: 500 }
     );

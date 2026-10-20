@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-sender";
 import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
+import { safeJson } from "@/lib/safe-response";
 
 // GET: Webhook verification (required by Meta)
 export async function GET(request: NextRequest) {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     console.log("Facebook webhook verified");
     return new NextResponse(challenge, { status: 200 });
   } else {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return safeJson({ error: "Forbidden" }, { status: 403 });
   }
 }
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     const value = changes?.value;
 
     if (!value || !value.leadgen_id) {
-      return NextResponse.json({ status: "no lead data" });
+      return safeJson({ status: "no lead data" });
     }
 
     const leadgenId = value.leadgen_id;
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     const leadData = await fetchLeadData(leadgenId);
 
     if (!leadData) {
-      return NextResponse.json({ error: "Failed to fetch lead" }, { status: 500 });
+      return safeJson({ error: "Failed to fetch lead" }, { status: 500 });
     }
 
     // Create or update contact
@@ -94,10 +95,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ status: "processed" });
+    return safeJson({ status: "processed" });
   } catch (error) {
     console.error("Facebook webhook error:", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return safeJson({ error: "Internal error" }, { status: 500 });
   }
 }
 

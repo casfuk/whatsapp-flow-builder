@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * POST /api/contacts/merge-duplicates
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
     console.log(`[Merge Duplicates] - Merged groups: ${mergedCount}`);
     console.log(`[Merge Duplicates] - Deleted duplicates: ${deletedCount}`);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       mergedGroups: mergedCount,
       deletedDuplicates: deletedCount,
@@ -158,7 +159,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[Merge Duplicates] Error:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         success: false,
         error: "Failed to merge duplicates",

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     if (!expectedToken) {
       console.log("[Cleanup] ⚠️ CLEANUP_TOKEN not configured in environment");
-      return NextResponse.json(
+      return safeJson(
         { error: "Cleanup token not configured" },
         { status: 500 }
       );
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     if (providedToken !== expectedToken) {
       console.log("[Cleanup] ❌ Invalid or missing token");
-      return NextResponse.json(
+      return safeJson(
         { error: "Unauthorized" },
         { status: 401 }
       );
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     const days = daysParam ? parseInt(daysParam, 10) : 5;
 
     if (isNaN(days) || days < 1) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Invalid days parameter" },
         { status: 400 }
       );
@@ -153,10 +154,10 @@ export async function GET(request: NextRequest) {
     console.log("[Cleanup] Summary:", JSON.stringify(summary, null, 2));
     console.log("[Cleanup] ========================================");
 
-    return NextResponse.json(summary);
+    return safeJson(summary);
   } catch (error) {
     console.error("[Cleanup] ❌ Error during cleanup:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Cleanup failed",
         details: error instanceof Error ? error.message : "Unknown error",

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function PATCH(
   request: NextRequest,
@@ -14,7 +15,7 @@ export async function PATCH(
       data: { unreadCount: 0 },
     });
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       chat: {
         id: chat.id,
@@ -23,7 +24,7 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Failed to mark chat as read:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to mark chat as read" },
       { status: 500 }
     );

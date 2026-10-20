@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function POST(request: NextRequest) {
   const { pageId } = await request.json();
 
   if (!pageId) {
-    return NextResponse.json({ error: "pageId required" }, { status: 400 });
+    return safeJson({ error: "pageId required" }, { status: 400 });
   }
 
   // Unset all defaults
@@ -20,5 +21,5 @@ export async function POST(request: NextRequest) {
     data: { isDefault: true },
   });
 
-  return NextResponse.json({ success: true });
+  return safeJson({ success: true });
 }

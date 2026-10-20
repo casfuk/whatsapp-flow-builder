@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET() {
   try {
@@ -13,10 +14,10 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json(settings);
+    return safeJson(settings);
   } catch (error) {
     console.error("Failed to fetch settings:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch settings" },
       { status: 500 }
     );
@@ -41,10 +42,10 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(settings);
+    return safeJson(settings);
   } catch (error) {
     console.error("Failed to update settings:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to update settings" },
       { status: 500 }
     );

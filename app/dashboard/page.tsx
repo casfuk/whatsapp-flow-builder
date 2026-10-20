@@ -32,7 +32,7 @@ interface Device {
   whatsappPhoneNumberId?: string;
   phoneNumber?: string;
   isConnected: boolean;
-  accessToken?: string;
+  hasAccessToken?: boolean;
   businessAccountId?: string;
   createdAt: string;
   updatedAt: string;
@@ -145,7 +145,7 @@ export default function DashboardPage() {
   const toggleConnection = async (device: Device) => {
     if (!device.isConnected) {
       // Can't connect if no credentials
-      if (!device.whatsappPhoneNumberId || !device.accessToken) {
+      if (!device.whatsappPhoneNumberId || !device.hasAccessToken) {
         alert("Este dispositivo no tiene credenciales configuradas");
         return;
       }

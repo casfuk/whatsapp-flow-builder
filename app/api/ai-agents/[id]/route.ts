@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * GET /api/ai-agents/[id]
@@ -19,7 +20,7 @@ export async function GET(
     });
 
     if (!agent) {
-      return NextResponse.json(
+      return safeJson(
         {
           success: false,
           error: "AI agent not found",
@@ -28,13 +29,13 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       agent,
     });
   } catch (error) {
     console.error("[AI Agents API] Error fetching agent:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         success: false,
         error: "Failed to fetch AI agent",
@@ -65,7 +66,7 @@ export async function PUT(
     });
 
     if (!existingAgent) {
-      return NextResponse.json(
+      return safeJson(
         {
           success: false,
           error: "AI agent not found",
@@ -77,7 +78,7 @@ export async function PUT(
     // Validate maxTurns if provided
     if (body.maxTurns !== undefined) {
       if (body.maxTurns < 1 || body.maxTurns > 20) {
-        return NextResponse.json(
+        return safeJson(
           {
             success: false,
             error: "maxTurns must be between 1 and 20",
@@ -107,14 +108,14 @@ export async function PUT(
 
     console.log(`[AI Agents API] Updated agent: ${id}`);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       agent: updatedAgent,
       message: "AI agent updated successfully",
     });
   } catch (error) {
     console.error("[AI Agents API] Error updating agent:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         success: false,
         error: "Failed to update AI agent",
@@ -144,7 +145,7 @@ export async function DELETE(
     });
 
     if (!existingAgent) {
-      return NextResponse.json(
+      return safeJson(
         {
           success: false,
           error: "AI agent not found",
@@ -160,13 +161,13 @@ export async function DELETE(
 
     console.log(`[AI Agents API] Deleted agent: ${id}`);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       message: "AI agent deleted successfully",
     });
   } catch (error) {
     console.error("[AI Agents API] Error deleting agent:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         success: false,
         error: "Failed to delete AI agent",

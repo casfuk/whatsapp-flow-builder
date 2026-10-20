@@ -118,7 +118,7 @@ export async function sendWhatsAppTextMessage(to: string, body: string) {
     console.log("[lib/whatsapp] URL:", url);
     console.log("[lib/whatsapp] Method: POST");
     console.log("[lib/whatsapp] Headers:", {
-      Authorization: `Bearer ${token.substring(0, 10)}...${token.substring(token.length - 4)}`,
+      Authorization: "Bearer [redacted]",
       "Content-Type": "application/json",
     });
     console.log("[lib/whatsapp] Body:", JSON.stringify(requestBody, null, 2));
@@ -192,7 +192,7 @@ export async function sendWhatsAppTemplate(
     console.log("[lib/whatsapp] URL:", url);
     console.log("[lib/whatsapp] Method: POST");
     console.log("[lib/whatsapp] Headers:", {
-      Authorization: `Bearer ${token.substring(0, 10)}...${token.substring(token.length - 4)}`,
+      Authorization: "Bearer [redacted]",
       "Content-Type": "application/json",
     });
     console.log("[lib/whatsapp] Body:", JSON.stringify(requestBody, null, 2));

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 // GET /api/mass-sends/preview-count - Get count of contacts matching filters
 export async function GET(request: NextRequest) {
@@ -57,10 +58,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ count: contacts.length });
+    return safeJson({ count: contacts.length });
   } catch (error) {
     console.error("Failed to get preview count:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to get preview count" },
       { status: 500 }
     );

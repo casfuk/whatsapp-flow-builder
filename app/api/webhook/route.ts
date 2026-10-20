@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { safeJson } from "@/lib/safe-response";
 
 // GET: Webhook verification
 export async function GET(request: NextRequest) {
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(challenge, { status: 200 });
   }
 
-  return NextResponse.json({ error: "Verification failed" }, { status: 403 });
+  return safeJson({ error: "Verification failed" }, { status: 403 });
 }
 
 // POST: Receive webhook events
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
   // TEMP: Webhook stub – no DB / flow logic yet
   console.log("Webhook received:", body);
 
-  return NextResponse.json({
+  return safeJson({
     ok: true,
     message: "Webhook stub. Flow handling not implemented yet.",
   });

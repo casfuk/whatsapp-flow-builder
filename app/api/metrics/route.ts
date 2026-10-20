@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * GET /api/metrics
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
       `,
     ]);
 
-    return NextResponse.json({
+    return safeJson({
       period,
       startDate: startDate.toISOString(),
       endDate: now.toISOString(),
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Failed to fetch metrics:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to fetch metrics",
         details: error instanceof Error ? error.message : "Unknown error",

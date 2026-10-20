@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 // Generate random slug
 function generateSlug(length: number = 7): string {
@@ -17,10 +18,10 @@ export async function GET() {
     const whalinks = await prisma.whalink.findMany({
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json(whalinks);
+    return safeJson(whalinks);
   } catch (error) {
     console.error("Failed to fetch whalinks:", error);
-    return NextResponse.json({ error: "Failed to fetch whalinks" }, { status: 500 });
+    return safeJson({ error: "Failed to fetch whalinks" }, { status: 500 });
   }
 }
 
@@ -32,15 +33,15 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!name || !deviceId || !presetMessage) {
-      return NextResponse.json({ error: "Name, device, and message are required" }, { status: 400 });
+      return safeJson({ error: "Name, device, and message are required" }, { status: 400 });
     }
 
     if (name.length > 100) {
-      return NextResponse.json({ error: "Name must be max 100 characters" }, { status: 400 });
+      return safeJson({ error: "Name must be max 100 characters" }, { status: 400 });
     }
 
     if (presetMessage.length > 250) {
-      return NextResponse.json({ error: "Message must be max 250 characters" }, { status: 400 });
+      return safeJson({ error: "Message must be max 250 characters" }, { status: 400 });
     }
 
     // Generate unique slug
@@ -71,9 +72,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(whalink);
+    return safeJson(whalink);
   } catch (error) {
     console.error("Failed to create whalink:", error);
-    return NextResponse.json({ error: "Failed to create whalink" }, { status: 500 });
+    return safeJson({ error: "Failed to create whalink" }, { status: 500 });
   }
 }

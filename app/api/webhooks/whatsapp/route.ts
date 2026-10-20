@@ -5,6 +5,7 @@ import { sendWhatsAppMessage, sendOwnerNotification, sendNewLeadNotification, se
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 import { checkAndSendAdminAlert } from "@/lib/admin-alerts";
+import { safeJson } from "@/lib/safe-response";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🧠 HUMAN-LIKE DELAY SIMULATION
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(challenge, { status: 200 });
   } else {
     console.log("Webhook verification failed");
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return safeJson({ error: "Forbidden" }, { status: 403 });
   }
 }
 
@@ -70,14 +71,14 @@ export async function POST(request: NextRequest) {
   // Check required environment variables
   if (!process.env.WHATSAPP_CLOUD_API_TOKEN) {
     console.error("[Webhook] CRITICAL: WHATSAPP_CLOUD_API_TOKEN is not set!");
-    return NextResponse.json(
+    return safeJson(
       { error: "WhatsApp API token not configured" },
       { status: 500 }
     );
   }
   if (!process.env.WHATSAPP_PHONE_NUMBER_ID) {
     console.error("[Webhook] CRITICAL: WHATSAPP_PHONE_NUMBER_ID is not set!");
-    return NextResponse.json(
+    return safeJson(
       { error: "WhatsApp phone number ID not configured" },
       { status: 500 }
     );
@@ -97,13 +98,13 @@ export async function POST(request: NextRequest) {
     // Handle status updates (read receipts, delivery confirmations, etc.)
     if (value?.statuses) {
       console.log("[Webhook] 📋 Status update received:", JSON.stringify(value.statuses, null, 2));
-      return NextResponse.json({ ok: true });
+      return safeJson({ ok: true });
     }
 
     // If no messages, this is some other type of webhook
     if (!messages || messages.length === 0) {
       console.log("[Webhook] ⚠️ Unknown payload without messages or statuses");
-      return NextResponse.json({ ok: true });
+      return safeJson({ ok: true });
     }
 
     const message = messages[0];
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     if (!normalizedText) {
       console.log(`[Webhook] Unsupported message type: ${messageType}`);
-      return NextResponse.json({ status: "unsupported type" });
+      return safeJson({ status: "unsupported type" });
     }
 
     const messageText = normalizedText; // ID for engine, title in metadata for UI
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
     if (!messageText || messageText.trim() === "") {
       console.log("[Webhook] 🛡️ EMPTY MESSAGE: Ignoring empty/whitespace-only message");
       console.log("[Webhook] This prevents AI from responding to stickers, empty taps, etc.");
-      return NextResponse.json({ status: "ignored (empty message)" });
+      return safeJson({ status: "ignored (empty message)" });
     }
 
     console.log(`[Webhook] ========================================`);
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
     if (isOurNotification) {
       console.log("[Webhook] 🛡️ LOOP PREVENTION: This is our own notification message - IGNORING");
       console.log("[Webhook] Message starts with:", messageText.substring(0, 50));
-      return NextResponse.json({ status: "ignored (our own notification)" });
+      return safeJson({ status: "ignored (our own notification)" });
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -254,7 +255,7 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        return NextResponse.json({ status: "reset successful" });
+        return safeJson({ status: "reset successful" });
       } catch (resetError) {
         console.error("[Webhook] ❌ Error during reset:", resetError);
         await sendWhatsAppMessage({
@@ -262,7 +263,7 @@ export async function POST(request: NextRequest) {
           message: "Error al reiniciar. Intenta de nuevo.",
           type: "text",
         });
-        return NextResponse.json({ status: "reset failed" });
+        return safeJson({ status: "reset failed" });
       }
     }
 
@@ -470,7 +471,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Early return - don't process AI logic
-          return NextResponse.json({ status: "ai_disabled" });
+          return safeJson({ status: "ai_disabled" });
         }
 
         // Check if AI is disabled for this chat
@@ -495,7 +496,7 @@ export async function POST(request: NextRequest) {
           if (chat.isResponding) {
             console.log("[AI Agent] 🛡️ BLOCKED: AI is already responding to a previous message");
             console.log("[AI Agent] This prevents double responses during human delay simulation");
-            return NextResponse.json({ status: "blocked (already responding)" });
+            return safeJson({ status: "blocked (already responding)" });
           }
 
           try {
@@ -789,10 +790,10 @@ export async function POST(request: NextRequest) {
 
           console.log(`[Webhook] ✓ All ${messageParts.length} message part(s) sent from ${data.agentName}`);
 
-          return NextResponse.json({ status: "ai agent replied" });
+          return safeJson({ status: "ai agent replied" });
         } catch (err) {
           console.error(`[Webhook] Error processing AI agent message:`, err);
-          return NextResponse.json({ status: "ai agent error" });
+          return safeJson({ status: "ai agent error" });
         }
       }
 
@@ -807,13 +808,13 @@ export async function POST(request: NextRequest) {
 
       if (!flow) {
         console.error(`[Webhook] Flow not found: ${existingSession.flowId}`);
-        return NextResponse.json({ status: "flow not found" });
+        return safeJson({ status: "flow not found" });
       }
 
         // Continue the flow from the current step
         await continueFlow(existingSession, flow, from, messageText, contact.id, deviceId);
 
-        return NextResponse.json({ status: "session continued" });
+        return safeJson({ status: "session continued" });
       }
     }
 
@@ -1045,11 +1046,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ status: "processed" });
+    return safeJson({ status: "processed" });
   } catch (error) {
     console.error("[Webhook] Unhandled error in POST handler:", error);
     // IMPORTANT: Always return 200 to WhatsApp to acknowledge receipt
-    return NextResponse.json({ status: "error", message: "Internal error handled" }, { status: 200 });
+    return safeJson({ status: "error", message: "Internal error handled" }, { status: 200 });
   }
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET(
   request: NextRequest,
@@ -13,7 +14,7 @@ export async function GET(
     });
 
     if (!whalink) {
-      return NextResponse.json({ error: "Link not found" }, { status: 404 });
+      return safeJson({ error: "Link not found" }, { status: 404 });
     }
 
     // Get device phone number
@@ -22,7 +23,7 @@ export async function GET(
     });
 
     if (!device || !device.phoneNumber) {
-      return NextResponse.json({ error: "Device not found or not configured" }, { status: 404 });
+      return safeJson({ error: "Device not found or not configured" }, { status: 404 });
     }
 
     // Clean phone number: remove +, spaces, and any non-digits
@@ -38,6 +39,6 @@ export async function GET(
     return NextResponse.redirect(whatsappUrl);
   } catch (error) {
     console.error("Redirect error:", error);
-    return NextResponse.json({ error: "Redirect failed" }, { status: 500 });
+    return safeJson({ error: "Redirect failed" }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * GET /api/v1/integrations/facebook/oauth/start
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     if (!clientId || !redirectUri) {
       console.error("[Facebook OAuth] Missing required environment variables");
-      return NextResponse.json(
+      return safeJson(
         { error: "OAuth configuration is incomplete" },
         { status: 500 }
       );
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(authUrl.toString());
   } catch (error) {
     console.error("[Facebook OAuth] Failed to initiate OAuth flow:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to initiate OAuth flow" },
       { status: 500 }
     );

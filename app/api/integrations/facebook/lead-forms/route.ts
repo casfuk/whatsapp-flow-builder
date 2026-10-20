@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * GET /api/integrations/facebook/lead-forms
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     const integration = await prisma.facebookPageIntegration.findFirst();
 
     if (!integration) {
-      return NextResponse.json(
+      return safeJson(
         { error: "No Facebook page connected" },
         { status: 404 }
       );
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[Facebook Lead Forms] Error response:", response.status, errorText);
-      return NextResponse.json(
+      return safeJson(
         { error: "Failed to fetch forms from Facebook" },
         { status: response.status }
       );
@@ -68,13 +69,13 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({
+    return safeJson({
       forms: formConfigs,
       integration,
     });
   } catch (error) {
     console.error("[Facebook Lead Forms] Error:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch lead forms" },
       { status: 500 }
     );
@@ -92,7 +93,7 @@ export async function PUT(request: NextRequest) {
     const { formId, flowId, tags, isActive } = body;
 
     if (!formId) {
-      return NextResponse.json(
+      return safeJson(
         { error: "formId is required" },
         { status: 400 }
       );
@@ -102,7 +103,7 @@ export async function PUT(request: NextRequest) {
     const integration = await prisma.facebookPageIntegration.findFirst();
 
     if (!integration) {
-      return NextResponse.json(
+      return safeJson(
         { error: "No Facebook page connected" },
         { status: 404 }
       );
@@ -124,10 +125,10 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ config });
+    return safeJson({ config });
   } catch (error) {
     console.error("[Facebook Lead Forms] Error updating config:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to update form configuration" },
       { status: 500 }
     );

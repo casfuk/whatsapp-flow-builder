@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * Create or update a third-party trigger
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!flowId || !deviceId) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Missing flowId or deviceId" },
         { status: 400 }
       );
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
 
       console.log("[Third-Party Triggers API] Trigger updated:", updatedTrigger.id);
 
-      return NextResponse.json({
+      return safeJson({
         triggerId: updatedTrigger.id,
         webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://flows-api.funnelchat.app"}/api/v1/integrations/${updatedTrigger.id}/webhook`,
       });
@@ -62,13 +63,13 @@ export async function POST(request: NextRequest) {
 
     console.log("[Third-Party Triggers API] Trigger created:", newTrigger.id);
 
-    return NextResponse.json({
+    return safeJson({
       triggerId: newTrigger.id,
       webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://flows-api.funnelchat.app"}/api/v1/integrations/${newTrigger.id}/webhook`,
     });
   } catch (error: any) {
     console.error("[Third-Party Triggers API] Error:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Internal error", message: error.message },
       { status: 500 }
     );

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
+import { safeJson } from "@/lib/safe-response";
 
 // GET single contact
 export async function GET(
@@ -26,7 +27,7 @@ export async function GET(
     });
 
     if (!contact) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Contact not found" },
         { status: 404 }
       );
@@ -56,10 +57,10 @@ export async function GET(
       })),
     };
 
-    return NextResponse.json(formattedContact);
+    return safeJson(formattedContact);
   } catch (error) {
     console.error("Failed to fetch contact:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch contact" },
       { status: 500 }
     );
@@ -103,7 +104,7 @@ export async function PUT(
         });
 
         if (conflictingContact && conflictingContact.id !== id) {
-          return NextResponse.json(
+          return safeJson(
             { error: "Ya existe un contacto con este número de teléfono en este dispositivo" },
             { status: 409 }
           );
@@ -119,19 +120,19 @@ export async function PUT(
       data: updateData,
     });
 
-    return NextResponse.json(updatedContact);
+    return safeJson(updatedContact);
   } catch (error: any) {
     console.error("Failed to update contact:", error);
 
     // Handle unique constraint violation
     if (error.code === "P2002") {
-      return NextResponse.json(
+      return safeJson(
         { error: "Ya existe un contacto con este número de teléfono" },
         { status: 409 }
       );
     }
 
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to update contact" },
       { status: 500 }
     );
@@ -226,10 +227,10 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updatedContact);
+    return safeJson(updatedContact);
   } catch (error) {
     console.error("Failed to update contact:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to update contact" },
       { status: 500 }
     );
@@ -247,10 +248,10 @@ export async function DELETE(
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return safeJson({ success: true });
   } catch (error) {
     console.error("Failed to delete contact:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to delete contact" },
       { status: 500 }
     );

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { RuntimeEngine } from "@/lib/runtime-engine";
+import { safeJson } from "@/lib/safe-response";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { flowKey, sessionId, name, email, phone, tags } = body;
 
     if (!flowKey || !sessionId) {
-      return NextResponse.json(
+      return safeJson(
         { error: "flowKey and sessionId are required" },
         { status: 400 }
       );
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!flow) {
-      return NextResponse.json(
+      return safeJson(
         { error: `Flow with key "${flowKey}" not found` },
         { status: 404 }
       );
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     // Find the start step
     const startStep = flow.steps.find((s) => s.type === "start");
     if (!startStep) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Flow has no start step" },
         { status: 400 }
       );
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     // Execute from start step
     const actions = await engine.executeFromStep(startStep.id);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       sessionId,
       flowId: flow.id,
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Runtime start error:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to start flow execution" },
       { status: 500 }
     );

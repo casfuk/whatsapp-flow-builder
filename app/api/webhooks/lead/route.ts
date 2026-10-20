@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsApp } from "@/lib/whatsapp";
+import { safeJson } from "@/lib/safe-response";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { name, phone, email, ...rest } = body;
 
     if (!phone) {
-      return NextResponse.json({ error: "Phone required" }, { status: 400 });
+      return safeJson({ error: "Phone required" }, { status: 400 });
     }
 
     // Save lead
@@ -27,9 +28,9 @@ export async function POST(request: NextRequest) {
       data: { phone, message, status: "sent" },
     });
 
-    return NextResponse.json({ success: true, leadId: lead.id });
+    return safeJson({ success: true, leadId: lead.id });
   } catch (error) {
     console.error("Webhook error:", error);
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return safeJson({ error: "Failed" }, { status: 500 });
   }
 }

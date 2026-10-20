@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runFlowForIncomingMessage } from "@/lib/flowEngine";
+import { safeJson } from "@/lib/safe-response";
 
 // GET endpoint for webhook verification (Meta setup)
 export async function GET(request: NextRequest) {
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(challenge, { status: 200 });
   } else {
     console.error("Webhook verification failed");
-    return NextResponse.json(
+    return safeJson(
       { error: "Verification failed" },
       { status: 403 }
     );
@@ -111,10 +112,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return safeJson({ success: true }, { status: 200 });
   } catch (error) {
     console.error("Webhook error:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Internal server error" },
       { status: 500 }
     );

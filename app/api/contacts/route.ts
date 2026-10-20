@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
+import { safeJson } from "@/lib/safe-response";
 
 // GET all contacts
 export async function GET(request: NextRequest) {
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
       })),
     }));
 
-    return NextResponse.json({
+    return safeJson({
       contacts: formattedContacts,
       total,
       page,
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Failed to fetch contacts:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch contacts" },
       { status: 500 }
     );
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
     const { phone, name, email, source, profileImageUrl } = body;
 
     if (!phone) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Phone number is required" },
         { status: 400 }
       );
@@ -138,10 +139,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(contact, { status: 201 });
+    return safeJson(contact, { status: 201 });
   } catch (error) {
     console.error("Failed to create contact:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to create contact" },
       { status: 500 }
     );

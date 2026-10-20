@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * POST /api/flows/[id]/duplicate
@@ -22,7 +23,7 @@ export async function POST(
     });
 
     if (!originalFlow) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Flow not found" },
         { status: 404 }
       );
@@ -98,10 +99,10 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(completeDuplicatedFlow, { status: 201 });
+    return safeJson(completeDuplicatedFlow, { status: 201 });
   } catch (error) {
     console.error("Failed to duplicate flow:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to duplicate flow",
         details: error instanceof Error ? error.message : "Unknown error",

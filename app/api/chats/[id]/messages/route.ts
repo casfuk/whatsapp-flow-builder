@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET(
   request: NextRequest,
@@ -36,7 +37,7 @@ export async function GET(
       createdAt: msg.createdAt.toISOString(),
     }));
 
-    return NextResponse.json({
+    return safeJson({
       messages: formattedMessages,
       total,
       limit,
@@ -44,7 +45,7 @@ export async function GET(
     });
   } catch (error) {
     console.error("Failed to fetch messages:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch messages" },
       { status: 500 }
     );
@@ -61,7 +62,7 @@ export async function POST(
     const { text } = body;
 
     if (!text || !text.trim()) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Message text is required" },
         { status: 400 }
       );
@@ -73,7 +74,7 @@ export async function POST(
     });
 
     if (!chat) {
-      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+      return safeJson({ error: "Chat not found" }, { status: 404 });
     }
 
     // Get device details
@@ -82,7 +83,7 @@ export async function POST(
     });
 
     if (!device) {
-      return NextResponse.json({ error: "Device not found" }, { status: 404 });
+      return safeJson({ error: "Device not found" }, { status: 404 });
     }
 
     // Send WhatsApp message via the WhatsApp API
@@ -115,7 +116,7 @@ export async function POST(
       console.log("[/api/chats/[id]/messages] Method: POST");
       console.log("[/api/chats/[id]/messages] Headers:", {
         Authorization: tokenForLog
-          ? `Bearer ${tokenForLog.substring(0, 10)}...${tokenForLog.substring(tokenForLog.length - 4)}`
+          ? "Bearer [redacted]"
           : "Bearer [NO TOKEN]",
         "Content-Type": "application/json",
       });
@@ -186,10 +187,10 @@ export async function POST(
       createdAt: message.createdAt.toISOString(),
     };
 
-    return NextResponse.json(formattedMessage, { status: 201 });
+    return safeJson(formattedMessage, { status: 201 });
   } catch (error) {
     console.error("Failed to send message:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to send message" },
       { status: 500 }
     );

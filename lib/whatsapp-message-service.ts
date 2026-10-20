@@ -157,7 +157,7 @@ export async function sendAndPersistMessage(params: SendAndPersistMessageParams)
   console.log("[WhatsApp Message Service] URL:", apiUrl);
   console.log("[WhatsApp Message Service] Method: POST");
   console.log("[WhatsApp Message Service] Headers:", {
-    Authorization: `Bearer ${config.accessToken.substring(0, 10)}...${config.accessToken.substring(config.accessToken.length - 4)}`,
+    Authorization: "Bearer [redacted]",
     "Content-Type": "application/json",
   });
   console.log("[WhatsApp Message Service] Body:", JSON.stringify(requestBody, null, 2));

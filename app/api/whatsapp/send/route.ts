@@ -1,12 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function POST(request: NextRequest) {
   try {
     const { deviceId, to, message } = await request.json();
 
     if (!to || !message) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Missing required fields: to, message" },
         { status: 400 }
       );
@@ -26,14 +27,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!device || !device.isConnected) {
-      return NextResponse.json(
+      return safeJson(
         { error: "No connected device found" },
         { status: 400 }
       );
     }
 
     if (!device.whatsappPhoneNumberId || !device.accessToken) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Device not properly configured" },
         { status: 400 }
       );
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     console.log("[/api/whatsapp/send] Device ID:", device.id);
     console.log("[/api/whatsapp/send] Method: POST");
     console.log("[/api/whatsapp/send] Headers:", {
-      Authorization: `Bearer ${device.accessToken.substring(0, 10)}...${device.accessToken.substring(device.accessToken.length - 4)}`,
+      Authorization: "Bearer [redacted]",
       "Content-Type": "application/json",
     });
     console.log("[/api/whatsapp/send] Body:", JSON.stringify(requestBody, null, 2));
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       console.error("[/api/whatsapp/send] ❌ WhatsApp API error:", data);
       console.log("[/api/whatsapp/send] ========================================");
-      return NextResponse.json(
+      return safeJson(
         {
           error: "Failed to send message",
           details: data.error?.message || "Unknown error",
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     console.log("[/api/whatsapp/send] Message ID:", data.messages?.[0]?.id);
     console.log("[/api/whatsapp/send] ========================================");
 
-    return NextResponse.json(
+    return safeJson(
       {
         success: true,
         messageId: data.messages?.[0]?.id,
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("Send message error:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Internal server error" },
       { status: 500 }
     );

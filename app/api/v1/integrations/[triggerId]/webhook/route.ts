@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { FlowEngine } from "@/lib/runtime-engine";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * OPTIONS handler for CORS preflight
@@ -54,7 +55,7 @@ export async function POST(
 
     if (!trigger) {
       console.error(`[Third-Party Webhook] Trigger not found: ${triggerId}`);
-      return NextResponse.json(
+      return safeJson(
         { error: "Trigger not found" },
         {
           status: 404,
@@ -193,7 +194,7 @@ export async function POST(
       console.log(`[FIELD_MAPPING] Returning fields even though validation failed`);
       console.log(`[FIELD_MAPPING] Flow Builder will still see ${fields.length} fields from this payload`);
 
-      return NextResponse.json(
+      return safeJson(
         {
           error: "Missing phone_number in payload (no mapping configured or field not found)",
           fields, // Include fields so Flow Builder can see them even when validation fails
@@ -313,7 +314,7 @@ export async function POST(
         console.log(`[FIELD_MAPPING] Returning fields to Flow Builder (skipped response)...`);
         console.log(`[FIELD_MAPPING] Response will include ${fields.length} fields`);
 
-        return NextResponse.json(
+        return safeJson(
           {
             ok: true,
             skipped: true,
@@ -417,7 +418,7 @@ export async function POST(
         fields: fields,
       });
 
-      return NextResponse.json(
+      return safeJson(
         {
           ok: true,
           contactId: contact.id,
@@ -435,7 +436,7 @@ export async function POST(
     }
   } catch (error: any) {
     console.error(`[Third-Party Webhook] Error:`, error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Internal error",
         message: error.message || "Unknown error",

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function DELETE(
   request: NextRequest,
@@ -12,10 +13,10 @@ export async function DELETE(
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return safeJson({ success: true });
   } catch (error: any) {
     console.error("Failed to delete tag:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to delete tag",
         message: error.message || "Unknown error",

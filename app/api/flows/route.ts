@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET() {
   try {
@@ -13,9 +14,9 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(flows);
+    return safeJson(flows);
   } catch (error) {
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch flows" },
       { status: 500 }
     );
@@ -198,7 +199,7 @@ export async function POST(request: NextRequest) {
     // Exclude raw steps and connections from response to avoid duplicates
     const { steps, connections, ...flowWithoutRawData } = fullFlow!;
 
-    return NextResponse.json(
+    return safeJson(
       {
         ...flowWithoutRawData,
         nodes: savedNodes,
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error("Create flow error:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to create flow",
         message: error.message || "Unknown error",

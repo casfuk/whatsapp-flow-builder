@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 // Helper function to slugify field name into a key
 function slugify(text: string): string {
@@ -19,10 +20,10 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(fields);
+    return safeJson(fields);
   } catch (error) {
     console.error("Failed to fetch custom fields:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch custom fields" },
       { status: 500 }
     );
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     const { name, type } = body;
 
     if (!name || name.trim() === "") {
-      return NextResponse.json(
+      return safeJson(
         { error: "Field name is required" },
         { status: 400 }
       );
@@ -60,10 +61,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(field, { status: 201 });
+    return safeJson(field, { status: 201 });
   } catch (error: any) {
     console.error("Failed to create custom field:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to create custom field",
         message: error.message || "Unknown error",

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET(
   request: NextRequest,
@@ -16,7 +17,7 @@ export async function GET(
     });
 
     if (!flow) {
-      return NextResponse.json({ error: "Flow not found" }, { status: 404 });
+      return safeJson({ error: "Flow not found" }, { status: 404 });
     }
 
     // Convert steps to React Flow nodes format
@@ -135,14 +136,14 @@ export async function GET(
     const { steps, connections, ...flowWithoutRawData } = flow;
 
     // Return flow with converted nodes and edges
-    return NextResponse.json({
+    return safeJson({
       ...flowWithoutRawData,
       nodes: migratedNodes,
       edges,
     });
   } catch (error) {
     console.error("Failed to fetch flow:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch flow" },
       { status: 500 }
     );
@@ -216,7 +217,7 @@ export async function PUT(
     const validationErrors = validateFlow(nodes || [], edges || []);
     if (validationErrors.length > 0) {
       console.log('[API PUT] Validation failed:', validationErrors);
-      return NextResponse.json(
+      return safeJson(
         { error: "Validation failed", errors: validationErrors },
         { status: 400 }
       );
@@ -437,7 +438,7 @@ export async function PUT(
 
     if (!fullFlow) {
       console.error('[API PUT] Flow not found after update!');
-      return NextResponse.json(
+      return safeJson(
         { error: "Flow not found after update" },
         { status: 404 }
       );
@@ -479,7 +480,7 @@ export async function PUT(
     // Exclude raw steps and connections from response to avoid duplicates
     const { steps, connections, ...flowWithoutRawData } = fullFlow;
 
-    return NextResponse.json({
+    return safeJson({
       ...flowWithoutRawData,
       nodes: savedNodes,
       edges: savedEdges,
@@ -487,7 +488,7 @@ export async function PUT(
   } catch (error: any) {
     console.error("[API PUT] Update flow error:", error);
     console.error("[API PUT] Error stack:", error.stack);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to update flow",
         message: error.message || "Unknown error",
@@ -508,9 +509,9 @@ export async function DELETE(
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return safeJson({ success: true });
   } catch (error) {
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to delete flow" },
       { status: 500 }
     );

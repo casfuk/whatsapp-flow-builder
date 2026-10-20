@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET() {
   try {
@@ -9,10 +10,10 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(tags);
+    return safeJson(tags);
   } catch (error) {
     console.error("Failed to fetch tags:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch tags" },
       { status: 500 }
     );
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     const { name, color } = body;
 
     if (!name || name.trim() === "") {
-      return NextResponse.json(
+      return safeJson(
         { error: "Tag name is required" },
         { status: 400 }
       );
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existing) {
-      return NextResponse.json(
+      return safeJson(
         { error: "A tag with this name already exists" },
         { status: 409 }
       );
@@ -50,10 +51,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(tag, { status: 201 });
+    return safeJson(tag, { status: 201 });
   } catch (error: any) {
     console.error("Failed to create tag:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to create tag",
         message: error.message || "Unknown error",

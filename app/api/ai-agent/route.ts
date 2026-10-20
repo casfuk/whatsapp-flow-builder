@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import { sendHandoverNotification, sendNewLeadNotification } from "@/lib/whatsapp-sender";
+import { safeJson } from "@/lib/safe-response";
 
 // POST /api/ai-agent - Process message with AI agent
 export async function POST(request: NextRequest) {
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!agentId || !userMessage) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Missing required fields: agentId, userMessage" },
         { status: 400 }
       );
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     if (!aiAgent) {
       console.error(`[AI Agent] Agent not found: ${agentId}`);
-      return NextResponse.json(
+      return safeJson(
         { error: "AI agent not found" },
         { status: 404 }
       );
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     if (!aiAgent.isActive) {
       console.error(`[AI Agent] Agent is inactive: ${agentId}`);
-      return NextResponse.json(
+      return safeJson(
         { error: "AI agent is inactive" },
         { status: 400 }
       );
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     if (!process.env.OPENAI_API_KEY) {
       console.error("[AI Agent] ❌ ERROR: OPENAI_API_KEY is not set in environment");
       console.error("[AI Agent] Please add OPENAI_API_KEY to .env.local or Vercel environment variables");
-      return NextResponse.json(
+      return safeJson(
         { error: "OpenAI API key not configured", reply: "Ahora mismo no puedo pensar 😅 Vuelve a intentarlo en unos minutos." },
         { status: 500 }
       );
@@ -777,7 +778,7 @@ ${aiAgent.systemPrompt || ""}`;
 
     console.log(`[AI Agent] Message for user (clean): "${messageForUser}"`);
 
-    return NextResponse.json({
+    return safeJson({
       reply: messageForUser, // ✅ Send only the clean part (no JSON, no [[HANDOVER]])
       agentId,
       agentName: aiAgent.name,
@@ -788,7 +789,7 @@ ${aiAgent.systemPrompt || ""}`;
     console.error("[AI Agent] Error stack:", error instanceof Error ? error.stack : "N/A");
 
     // Always return a fallback message so user gets something
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to process AI agent message",
         details: error instanceof Error ? error.message : "Unknown error",

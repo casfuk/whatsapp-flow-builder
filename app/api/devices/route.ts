@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET() {
   try {
@@ -11,7 +12,7 @@ export async function GET() {
         isConnected: true,
         color: true,
         whatsappPhoneNumberId: true,
-        accessToken: true,
+        accessToken: true, // read only to derive hasAccessToken, never returned
         businessAccountId: true,
         createdAt: true,
         updatedAt: true,
@@ -27,16 +28,16 @@ export async function GET() {
       isConnected: device.isConnected,
       color: device.color || "#6D5BFA",
       whatsappPhoneNumberId: device.whatsappPhoneNumberId,
-      accessToken: device.accessToken,
+      hasAccessToken: !!device.accessToken,
       businessAccountId: device.businessAccountId,
       createdAt: device.createdAt.toISOString(),
       updatedAt: device.updatedAt.toISOString(),
     }));
 
-    return NextResponse.json({ devices: formattedDevices });
+    return safeJson({ devices: formattedDevices });
   } catch (error) {
     console.error("Failed to fetch devices:", error);
-    return NextResponse.json({ error: "Failed to fetch devices" }, { status: 500 });
+    return safeJson({ error: "Failed to fetch devices" }, { status: 500 });
   }
 }
 
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     const { name, whatsappPhoneNumberId, accessToken, businessAccountId, phoneNumber, color } = body;
 
     if (!name || !whatsappPhoneNumberId || !accessToken) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Name, Phone Number ID, and Access Token are required" },
         { status: 400 }
       );
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingDevice) {
-      return NextResponse.json(
+      return safeJson(
         { error: "A device with this phone number already exists" },
         { status: 409 }
       );
@@ -110,21 +111,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    return safeJson({
       id: device.id,
       name: device.name,
       phoneNumber: device.phoneNumber || "",
       isConnected: device.isConnected,
       color: device.color || "#6D5BFA",
       whatsappPhoneNumberId: device.whatsappPhoneNumberId,
-      accessToken: device.accessToken,
+      hasAccessToken: !!device.accessToken,
       businessAccountId: device.businessAccountId,
       createdAt: device.createdAt.toISOString(),
       updatedAt: device.updatedAt.toISOString(),
     }, { status: 201 });
   } catch (error) {
     console.error("Failed to create device:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to create device" },
       { status: 500 }
     );

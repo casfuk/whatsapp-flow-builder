@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { processAllFollowups } from "@/lib/followup-service";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * GET /api/cron/process-followups
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       console.error("[Cron] Unauthorized follow-up processing attempt");
-      return NextResponse.json(
+      return safeJson(
         { error: "Unauthorized" },
         { status: 401 }
       );
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.log(`[Cron] ✅ Follow-up processing completed in ${duration}ms`);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       message: "Follow-up processing completed",
       duration_ms: duration,
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("[Cron] ❌ Error processing follow-ups:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to process follow-ups",
         message: error instanceof Error ? error.message : "Unknown error",

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Chat } from "@/app/types/chat";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
+import { safeJson } from "@/lib/safe-response";
 
 export async function GET(request: NextRequest) {
   try {
@@ -109,10 +110,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ chats: formattedChats });
+    return safeJson({ chats: formattedChats });
   } catch (error) {
     console.error("Failed to fetch chats:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch chats" },
       { status: 500 }
     );
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
     const { deviceId, phoneNumber: rawPhone } = body;
 
     if (!deviceId || !rawPhone) {
-      return NextResponse.json(
+      return safeJson(
         { error: "deviceId and phoneNumber are required" },
         { status: 400 }
       );
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!device) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Device not found" },
         { status: 404 }
       );
@@ -192,10 +193,10 @@ export async function POST(request: NextRequest) {
       assignedToUserId: chat.assignedToUserId,
     };
 
-    return NextResponse.json(formattedChat, { status: 201 });
+    return safeJson(formattedChat, { status: 201 });
   } catch (error) {
     console.error("Failed to create chat:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to create chat" },
       { status: 500 }
     );

@@ -1,5 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
+
+type WhatsAppConfigRecord = Awaited<ReturnType<typeof prisma.whatsAppConfig.findFirst>>;
+
+// Never send credentials or session data to the browser
+function toPublicConfig(config: NonNullable<WhatsAppConfigRecord>) {
+  const { accessToken, sessionState, ...rest } = config;
+  return { ...rest, hasAccessToken: !!accessToken, hasSessionState: !!sessionState };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,10 +28,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json(config);
+    return safeJson(toPublicConfig(config));
   } catch (error) {
     console.error("Failed to fetch WhatsApp config:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch WhatsApp config" },
       { status: 500 }
     );
@@ -55,10 +64,10 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(config);
+    return safeJson(toPublicConfig(config));
   } catch (error) {
     console.error("Failed to update WhatsApp config:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to update WhatsApp config" },
       { status: 500 }
     );

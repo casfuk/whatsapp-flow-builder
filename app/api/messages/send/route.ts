@@ -1,12 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getWhatsAppClient } from "@/lib/whatsapp/client";
+import { safeJson } from "@/lib/safe-response";
 
 export async function POST(request: NextRequest) {
   try {
     const { to, body, workspaceId } = await request.json();
 
     if (!to || !body) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Missing required fields: to, body" },
         { status: 400 }
       );
@@ -15,10 +16,10 @@ export async function POST(request: NextRequest) {
     const client = await getWhatsAppClient(workspaceId);
     await client.sendTextMessage({ to, body });
 
-    return NextResponse.json({ success: true });
+    return safeJson({ success: true });
   } catch (error) {
     console.error("Failed to send message:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: error instanceof Error ? error.message : "Failed to send message" },
       { status: 500 }
     );

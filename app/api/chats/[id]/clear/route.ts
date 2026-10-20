@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 // POST: Clear all messages from a chat but keep the chat
 export async function POST(
@@ -30,13 +31,13 @@ export async function POST(
 
     console.log(`[POST /api/chats/${chatId}/clear] ✅ Chat cleared successfully`);
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       deletedMessages: deletedMessages.count,
     });
   } catch (error) {
     console.error(`[POST /api/chats/[id]/clear] Error:`, error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to clear chat" },
       { status: 500 }
     );

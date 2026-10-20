@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 /**
  * GET /api/integrations/facebook/pages
@@ -14,13 +15,13 @@ export async function GET(request: NextRequest) {
     });
 
     if (!integration) {
-      return NextResponse.json({ integration: null });
+      return safeJson({ integration: null });
     }
 
-    return NextResponse.json({ integration });
+    return safeJson({ integration });
   } catch (error) {
     console.error("Failed to fetch Facebook integration:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to fetch integration" },
       { status: 500 }
     );
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     const { pageId, pageName, pageAccessToken, userId } = body;
 
     if (!pageId || !pageName || !pageAccessToken) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Missing required fields" },
         { status: 400 }
       );
@@ -64,10 +65,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ integration }, { status: 201 });
+    return safeJson({ integration }, { status: 201 });
   } catch (error) {
     console.error("Failed to connect Facebook page:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to connect page" },
       { status: 500 }
     );
@@ -83,10 +84,10 @@ export async function DELETE(request: NextRequest) {
     // Delete the integration (cascade will delete configs)
     await prisma.facebookPageIntegration.deleteMany({});
 
-    return NextResponse.json({ success: true });
+    return safeJson({ success: true });
   } catch (error) {
     console.error("Failed to disconnect Facebook page:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to disconnect page" },
       { status: 500 }
     );

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { RuntimeEngine } from "@/lib/runtime-engine";
+import { safeJson } from "@/lib/safe-response";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { flowKey, sessionId, messageText } = body;
 
     if (!sessionId || !messageText) {
-      return NextResponse.json(
+      return safeJson(
         { error: "sessionId and messageText are required" },
         { status: 400 }
       );
@@ -17,21 +18,21 @@ export async function POST(request: NextRequest) {
     // Get session state
     const sessionState = await RuntimeEngine.getSessionState(sessionId);
     if (!sessionState) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Session not found. Please start a new flow." },
         { status: 404 }
       );
     }
 
     if (sessionState.status === "completed") {
-      return NextResponse.json(
+      return safeJson(
         { error: "Session has already completed" },
         { status: 400 }
       );
     }
 
     if (!sessionState.currentStepId) {
-      return NextResponse.json(
+      return safeJson(
         { error: "No current step found for session" },
         { status: 400 }
       );
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!flow) {
-      return NextResponse.json(
+      return safeJson(
         { error: "Flow not found" },
         { status: 404 }
       );
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
       messageText
     );
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       sessionId,
       flowId: flow.id,
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Runtime continue error:", error);
-    return NextResponse.json(
+    return safeJson(
       { error: "Failed to continue flow execution" },
       { status: 500 }
     );

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 export async function PATCH(
   request: NextRequest,
@@ -11,7 +12,7 @@ export async function PATCH(
     const { isActive } = body;
 
     if (typeof isActive !== "boolean") {
-      return NextResponse.json(
+      return safeJson(
         { error: "isActive must be a boolean" },
         { status: 400 }
       );
@@ -22,10 +23,10 @@ export async function PATCH(
       data: { isActive },
     });
 
-    return NextResponse.json(flow);
+    return safeJson(flow);
   } catch (error: any) {
     console.error("Failed to update flow status:", error);
-    return NextResponse.json(
+    return safeJson(
       {
         error: "Failed to update flow status",
         message: error.message || "Unknown error",

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeJson } from "@/lib/safe-response";
 
 // GET: Get single whalink
 export async function GET(request: NextRequest, context: any) {
@@ -11,13 +12,13 @@ export async function GET(request: NextRequest, context: any) {
     });
 
     if (!whalink) {
-      return NextResponse.json({ error: "Whalink not found" }, { status: 404 });
+      return safeJson({ error: "Whalink not found" }, { status: 404 });
     }
 
-    return NextResponse.json(whalink);
+    return safeJson(whalink);
   } catch (error) {
     console.error("Failed to fetch whalink:", error);
-    return NextResponse.json({ error: "Failed to fetch whalink" }, { status: 500 });
+    return safeJson({ error: "Failed to fetch whalink" }, { status: 500 });
   }
 }
 
@@ -31,11 +32,11 @@ export async function PUT(request: NextRequest, context: any) {
 
     // Validation
     if (name && name.length > 100) {
-      return NextResponse.json({ error: "Name must be max 100 characters" }, { status: 400 });
+      return safeJson({ error: "Name must be max 100 characters" }, { status: 400 });
     }
 
     if (presetMessage && presetMessage.length > 250) {
-      return NextResponse.json({ error: "Message must be max 250 characters" }, { status: 400 });
+      return safeJson({ error: "Message must be max 250 characters" }, { status: 400 });
     }
 
     const whalink = await prisma.whalink.update({
@@ -52,10 +53,10 @@ export async function PUT(request: NextRequest, context: any) {
       },
     });
 
-    return NextResponse.json(whalink);
+    return safeJson(whalink);
   } catch (error) {
     console.error("Failed to update whalink:", error);
-    return NextResponse.json({ error: "Failed to update whalink" }, { status: 500 });
+    return safeJson({ error: "Failed to update whalink" }, { status: 500 });
   }
 }
 
@@ -68,9 +69,9 @@ export async function DELETE(request: NextRequest, context: any) {
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return safeJson({ success: true });
   } catch (error) {
     console.error("Failed to delete whalink:", error);
-    return NextResponse.json({ error: "Failed to delete whalink" }, { status: 500 });
+    return safeJson({ error: "Failed to delete whalink" }, { status: 500 });
   }
 }
