@@ -38,12 +38,12 @@ Use a free external cron service to call the endpoint every minute:
    - **URL:** `https://your-domain.vercel.app/api/cron/process-followups`
    - **Method:** GET
    - **Schedule:** Every 1 minute (`* * * * *`)
-   - **Header:** `Authorization: Bearer funnelchat_cron_secret_2025`
+   - **Header:** `Authorization: Bearer <your CRON_SECRET>`
 
 2. Add `CRON_SECRET` to Vercel environment variables:
    ```bash
    vercel env add CRON_SECRET production
-   # Enter: funnelchat_cron_secret_2025
+   # Enter a newly generated value, e.g. from: openssl rand -hex 32 (never commit it)
    ```
 
 ### Option 2: Vercel Cron (Pro Plan Required)
@@ -112,7 +112,7 @@ The system now sends WhatsApp alerts to admin (+34644412937) for:
 
 ```bash
 curl -X GET "http://localhost:3000/api/cron/process-followups" \
-  -H "Authorization: Bearer funnelchat_cron_secret_2025"
+  -H "Authorization: Bearer $CRON_SECRET"
 ```
 
 Expected response:
@@ -151,7 +151,7 @@ Check logs in Vercel dashboard:
 Ensure these are set in Vercel:
 
 ```bash
-CRON_SECRET=funnelchat_cron_secret_2025
+CRON_SECRET=<generate with: openssl rand -hex 32>
 FACEBOOK_OAUTH_APP_ID=your_app_id
 FACEBOOK_OAUTH_APP_SECRET=your_app_secret
 FACEBOOK_OAUTH_REDIRECT_URI=https://whatsapp-flow-builder-a3ce.vercel.app/api/v1/integrations/facebook/oauth/callback
