@@ -328,6 +328,28 @@ describe("flow-driven agent routing", () => {
     expect(handover.args[3]).toBe("34600111222");
   });
 
+  it("a deactivated agent no longer blocks flows or replies", async () => {
+    await send("111", "alpha");
+    await fake.aiAgent.update({ where: { id: agentA.id }, data: { isActive: false } });
+    // Partial keyword match now starts the router (agent no longer active) -> activates B
+    const res = await send("111", "now I want beta");
+    expect(res.status).toBe("flow started");
+    expect((await chatOf("111")).assignedAgentId).toBe(agentB.id);
+  });
+
+  it("deleting an agent releases its conversations", async () => {
+    await send("111", "alpha");
+    const { DELETE } = await import("@/app/api/ai-agents/[id]/route");
+    fake.aiAgent.delete = async ({ where }: any) => {
+      const rows = fake._tables.aiAgent;
+      rows.splice(rows.findIndex((r: any) => r.id === where.id), 1);
+    };
+    await DELETE(new NextRequest("https://x/api/ai-agents/x", { method: "DELETE" }), { params: Promise.resolve({ id: agentA.id }) });
+    const chat = await chatOf("111");
+    expect(chat.assignedAgentId).toBeNull();
+    expect((await send("111", "hello?")).status).toBe("processed");
+  });
+
   it("inactive or missing agents are skipped safely", async () => {
     await fake.aiAgent.update({ where: { id: agentA.id }, data: { isActive: false } });
     await send("111", "alpha");

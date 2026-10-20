@@ -209,7 +209,12 @@ export async function POST(request: NextRequest) {
       return safeJson({ status: "ai_disabled" });
     }
 
-    const aiActive = chat.assignedAgentType === "AI" && !!chat.assignedAgentId && !chat.aiDisabled;
+    // An agent only counts as active if it still exists and is enabled
+    const assignedAgent =
+      chat.assignedAgentType === "AI" && chat.assignedAgentId && !chat.aiDisabled
+        ? await prisma.aiAgent.findUnique({ where: { id: chat.assignedAgentId }, select: { isActive: true } })
+        : null;
+    const aiActive = !!assignedAgent?.isActive;
     const flows = await prisma.flow.findMany({
       where: { isActive: true },
       include: { steps: true, connections: true },

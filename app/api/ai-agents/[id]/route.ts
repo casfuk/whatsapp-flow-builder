@@ -136,7 +136,11 @@ export async function DELETE(
       );
     }
 
-    // Delete the agent
+    // Release conversations handled by this agent, then delete it
+    await prisma.chat.updateMany({
+      where: { assignedAgentId: id },
+      data: { assignedAgentType: null, assignedAgentId: null, lastQuestionSentAt: null, lastQuestionAttempts: 0 },
+    });
     await prisma.aiAgent.delete({
       where: { id },
     });
