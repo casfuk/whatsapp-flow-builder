@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Device } from "@/app/types/chat";
+import { ChatAgentControl } from "./ChatAgentControl";
 
 interface Message {
   id: string;
@@ -390,6 +391,9 @@ export function ChatThreadEnhanced({
             </div>
           </div>
         </div>
+
+        {/* AI agent controls */}
+        <ChatAgentControl key={chatId} chatId={chatId} />
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4">

@@ -120,17 +120,25 @@ export function PlaceholderNode({ data, id }: NodeProps) {
             </div>
           </div>
 
-          {/* Asignar Agente IA - disabled */}
+          {/* Agentes IA: the flow decides which agent handles the conversation */}
           <div>
-            <button
-              disabled
-              className="w-full h-12 px-4 bg-gray-100 text-gray-400 rounded-xl font-medium text-sm cursor-not-allowed flex items-center gap-3 opacity-60"
-            >
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              Asignar Agente IA
-            </button>
+            <p className="text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-3">Agente IA</p>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { preset: "activate", icon: "🤖", label: "Activar" },
+                { preset: "change", icon: "🔄", label: "Cambiar" },
+                { preset: "stop", icon: "⏹️", label: "Detener" },
+              ].map((item) => (
+                <button
+                  key={item.preset}
+                  onClick={() => handleAddNode(`ai_agent:${item.preset}`)}
+                  className="h-12 px-2 bg-[#F5F7FA] hover:bg-[#E5E7EB] text-[#1C1C1C] rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span>{item.icon}</span>
+                  <span className="truncate">{item.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

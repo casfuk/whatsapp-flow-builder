@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { safeJson } from "@/lib/safe-response";
+import { parseAgentInput } from "@/lib/ai/agent-config";
 
 /**
  * GET /api/ai-agents/[id]
@@ -75,35 +77,15 @@ export async function PUT(
       );
     }
 
-    // Validate maxTurns if provided
-    if (body.maxTurns !== undefined) {
-      if (body.maxTurns < 1 || body.maxTurns > 20) {
-        return safeJson(
-          {
-            success: false,
-            error: "maxTurns must be between 1 and 20",
-          },
-          { status: 400 }
-        );
-      }
+    const { data: updateData, errors } = parseAgentInput(body, { partial: true });
+    if (errors.length > 0) {
+      return safeJson({ success: false, error: errors.join(". ") }, { status: 400 });
     }
-
-    // Build update data object (only update provided fields)
-    const updateData: any = {};
-
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.description !== undefined) updateData.description = body.description;
-    if (body.language !== undefined) updateData.language = body.language;
-    if (body.tone !== undefined) updateData.tone = body.tone;
-    if (body.goal !== undefined) updateData.goal = body.goal;
-    if (body.systemPrompt !== undefined) updateData.systemPrompt = body.systemPrompt;
-    if (body.maxTurns !== undefined) updateData.maxTurns = body.maxTurns;
-    if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
     // Update the agent
     const updatedAgent = await prisma.aiAgent.update({
       where: { id },
-      data: updateData,
+      data: updateData as Prisma.AiAgentUpdateInput,
     });
 
     console.log(`[AI Agents API] Updated agent: ${id}`);

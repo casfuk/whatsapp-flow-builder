@@ -374,10 +374,12 @@ export async function sendOwnerNotification(opts: {
 export async function sendHandoverNotification(
   handoverData: Record<string, any>,
   clientPhone: string,
-  agentName?: string
+  agentName?: string,
+  notifyPhone?: string
 ): Promise<boolean> {
   try {
-    const supervisorNumber = "34644412937"; // David (Admin) - receives ALL AI agent HANDOVER notifications
+    // Per-agent handover number (configured on the agent), else the admin number
+    const supervisorNumber = (notifyPhone || "").replace(/[^\d]/g, "") || "34644412937";
     const baseUrl = process.env.APP_BASE_URL;
 
     console.log("[Handover] ========================================");

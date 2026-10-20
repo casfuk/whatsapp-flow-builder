@@ -4,9 +4,36 @@ import { useState, useEffect } from "react";
 import { useTagsStore } from "@/lib/stores/useTagsStore";
 
 export interface Condition {
-  type: "tag" | "weekday" | "time";
-  operator: "is" | "is_not";
+  type: "tag" | "weekday" | "time" | "message";
+  operator: "is" | "is_not" | "contains" | "not_contains" | "starts_with" | "equals" | "after" | "before";
   value: string;
+}
+
+const OPERATORS: Record<Condition["type"], { value: Condition["operator"]; label: string }[]> = {
+  tag: [
+    { value: "is", label: "Tiene" },
+    { value: "is_not", label: "No tiene" },
+  ],
+  weekday: [
+    { value: "is", label: "Es" },
+    { value: "is_not", label: "No es" },
+  ],
+  time: [
+    { value: "after", label: "A partir de" },
+    { value: "before", label: "Antes de" },
+  ],
+  message: [
+    { value: "contains", label: "Contiene" },
+    { value: "starts_with", label: "Empieza por" },
+    { value: "equals", label: "Es exactamente" },
+    { value: "not_contains", label: "No contiene" },
+  ],
+};
+
+export function describeCondition(c: Condition) {
+  const typeLabel = { tag: "Tag", weekday: "Día", time: "Hora", message: "Mensaje" }[c.type];
+  const op = OPERATORS[c.type]?.find((o) => o.value === c.operator)?.label.toLowerCase() ?? c.operator;
+  return `${typeLabel} ${op} "${c.value}"`;
 }
 
 interface ConditionModalProps {
@@ -89,8 +116,8 @@ export function ConditionModal({
     updated[index] = {
       ...updated[index],
       [field]: value,
-      // Reset value when type changes
-      ...(field === "type" ? { value: "" } : {}),
+      // Reset value and operator when type changes
+      ...(field === "type" ? { value: "", operator: OPERATORS[value as Condition["type"]][0].value } : {}),
     };
     setConditions(updated);
   };
@@ -136,6 +163,17 @@ export function ConditionModal({
             value={condition.value}
             onChange={(e) => updateCondition(index, "value", e.target.value)}
             className="flex-1 min-w-[120px] px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-transparent text-sm"
+          />
+        );
+
+      case "message":
+        return (
+          <input
+            type="text"
+            value={condition.value}
+            onChange={(e) => updateCondition(index, "value", e.target.value)}
+            placeholder="Ej: english, inglés"
+            className="flex-1 min-w-[160px] px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-transparent text-sm"
           />
         );
 
@@ -187,7 +225,8 @@ export function ConditionModal({
 
             {/* Description */}
             <p className="text-sm text-gray-600">
-              Define las condiciones que debe cumplir el contacto
+              Define las condiciones que debe cumplir el contacto (todas). &quot;Mensaje del cliente&quot; usa su
+              último mensaje; separa varias palabras con comas.
             </p>
           </div>
 
@@ -209,6 +248,7 @@ export function ConditionModal({
                   }
                   className="flex-1 min-w-[120px] px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-transparent text-sm"
                 >
+                  <option value="message">Mensaje del cliente</option>
                   <option value="tag">Tag</option>
                   <option value="weekday">Día de la semana</option>
                   <option value="time">Hora</option>
@@ -226,8 +266,11 @@ export function ConditionModal({
                   }
                   className="flex-1 min-w-[100px] px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6D5BFA] focus:border-transparent text-sm"
                 >
-                  <option value="is">Es</option>
-                  <option value="is_not">No es</option>
+                  {(OPERATORS[condition.type] ?? OPERATORS.tag).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </select>
 
                 {/* Value Dropdown/Input */}

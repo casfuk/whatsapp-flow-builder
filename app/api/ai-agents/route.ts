@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { safeJson } from "@/lib/safe-response";
+import { parseAgentInput } from "@/lib/ai/agent-config";
 
 /**
  * GET /api/ai-agents
@@ -13,19 +15,6 @@ export async function GET(request: NextRequest) {
     const agents = await prisma.aiAgent.findMany({
       orderBy: {
         createdAt: "desc",
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        language: true,
-        tone: true,
-        goal: true,
-        systemPrompt: true,
-        maxTurns: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
       },
     });
 
@@ -56,54 +45,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      name,
-      description,
-      language,
-      tone,
-      goal,
-      systemPrompt,
-      maxTurns,
-      isActive,
-    } = body;
-
-    console.log("[AI Agents API] POST /api/ai-agents - Creating new agent:", name);
-
-    // Validation
-    if (!name || !systemPrompt) {
-      return safeJson(
-        {
-          success: false,
-          error: "Missing required fields: name and systemPrompt are required",
-        },
-        { status: 400 }
-      );
+    const { data, errors } = parseAgentInput(body, { partial: false });
+    if (errors.length > 0) {
+      return safeJson({ success: false, error: errors.join(". ") }, { status: 400 });
     }
 
-    if (maxTurns && (maxTurns < 1 || maxTurns > 20)) {
-      return safeJson(
-        {
-          success: false,
-          error: "maxTurns must be between 1 and 20",
-        },
-        { status: 400 }
-      );
-    }
-
-    const agent = await prisma.aiAgent.create({
-      data: {
-        name,
-        description: description || null,
-        language: language || "es",
-        tone: tone || "professional",
-        goal: goal || null,
-        systemPrompt,
-        maxTurns: maxTurns || 20,
-        isActive: isActive !== undefined ? isActive : true,
-      },
-    });
-
-    console.log(`[AI Agents API] Created agent: ${agent.id}`);
+    const agent = await prisma.aiAgent.create({ data: data as Prisma.AiAgentCreateInput });
 
     return safeJson({
       success: true,

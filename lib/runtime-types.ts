@@ -1,5 +1,5 @@
 export interface Action {
-  type: "send_whatsapp" | "send_whatsapp_interactive" | "send_whatsapp_media" | "send_email" | "send_whatsapp_template" | "wait" | "assign_to_admin" | "assign_conversation";
+  type: "send_whatsapp" | "send_whatsapp_interactive" | "send_whatsapp_media" | "send_email" | "send_whatsapp_template" | "wait" | "assign_to_admin" | "assign_conversation" | "ai_agent";
   [key: string]: any;
 }
 

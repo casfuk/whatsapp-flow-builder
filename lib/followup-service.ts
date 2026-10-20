@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 
-const FOLLOWUP_DELAY_MS = 2 * 60 * 1000; // 2 minutes
 const QUESTION_EXPIRATION_MS = 60 * 60 * 1000; // 1 hour
 const MAX_ATTEMPTS = 2; // Original + 1 follow-up
 const MAX_BOT_MESSAGES_WITHOUT_REPLY = 2; // Safety guard: max bot messages in a row
@@ -104,11 +103,25 @@ export async function checkAndSendFollowup(chatId: string): Promise<boolean> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 7. CHECK IF ENOUGH TIME HAS PASSED (2 MINUTES)
+  // 7. AGENT FOLLOW-UP SETTINGS (configured per agent in the UI)
   // ═══════════════════════════════════════════════════════════════════════════
-  if (timeSinceQuestion < FOLLOWUP_DELAY_MS) {
+  const aiAgent = await prisma.aiAgent.findUnique({
+    where: { id: chat.assignedAgentId },
+  });
+
+  if (!aiAgent) {
+    console.error(`[Follow-up] AI agent ${chat.assignedAgentId} not found for chat ${chatId}`);
+    return false;
+  }
+
+  if (!aiAgent.followupEnabled) {
+    return false;
+  }
+
+  const followupDelayMs = Math.max(1, aiAgent.followupDelayMinutes) * 60 * 1000;
+  if (timeSinceQuestion < followupDelayMs) {
     console.log(
-      `[Follow-up] Skipping chat ${chatId} - not enough time elapsed (${minutesSinceQuestion}min < 2min)`
+      `[Follow-up] Skipping chat ${chatId} - not enough time elapsed (${minutesSinceQuestion}min < ${aiAgent.followupDelayMinutes}min)`
     );
     return false;
   }
@@ -134,21 +147,9 @@ export async function checkAndSendFollowup(chatId: string): Promise<boolean> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 9. GET AI AGENT
-  // ═══════════════════════════════════════════════════════════════════════════
-  const aiAgent = await prisma.aiAgent.findUnique({
-    where: { id: chat.assignedAgentId },
-  });
-
-  if (!aiAgent) {
-    console.error(`[Follow-up] AI agent ${chat.assignedAgentId} not found for chat ${chatId}`);
-    return false;
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // 10. GENERATE FOLLOW-UP MESSAGE (SHORT VARIATION, NOT GREETING)
   // ═══════════════════════════════════════════════════════════════════════════
-  const followupMessage = generateFollowupMessage(aiAgent.name);
+  const followupMessage = generateFollowupMessage(aiAgent);
 
   try {
     console.log(`[Follow-up] ✅ Sending follow-up (attempt ${chat.lastQuestionAttempts + 1}/${MAX_ATTEMPTS}) to chat ${chatId}`);
@@ -164,6 +165,7 @@ export async function checkAndSendFollowup(chatId: string): Promise<boolean> {
       sender: "agent",
       textPreview: followupMessage,
       chatId: chat.id,
+      agentId: aiAgent.id,
     });
 
     // Update chat tracking (DO NOT update lastQuestionSentAt - keep it pointing to the original question)
@@ -184,35 +186,22 @@ export async function checkAndSendFollowup(chatId: string): Promise<boolean> {
   }
 }
 
+const DEFAULT_FOLLOWUPS: Record<string, string[]> = {
+  es: ["¿Sigues ahí? 😊", "¿Tienes alguna duda?", "¿Necesitas más información?"],
+  en: ["Are you still there? 😊", "Do you have any questions?", "Would you like more information?"],
+};
+
 /**
- * Generates a short follow-up message (NOT a greeting)
- * @param agentName - Name of the AI agent (ClaudIA, MarIA)
- * @returns A short follow-up reminder
+ * Picks a short follow-up reminder (NOT a greeting) from the agent's own
+ * follow-up messages (one per line), or a neutral default in its language.
  */
-function generateFollowupMessage(agentName: string): string {
-  // Short follow-up variations (NOT greetings, just gentle reminders)
-  const followupVariations: Record<string, string[]> = {
-    ClaudIA: [
-      "¿Sigues interesado/a? 💪",
-      "¿Tienes alguna duda?",
-      "¿Necesitas más información?",
-      "Cuando quieras, aquí estoy para ayudarte. 😊",
-    ],
-    MarIA: [
-      "¿Sigues ahí? 😊",
-      "¿Hay algo en lo que pueda ayudarte?",
-      "¿Necesitas más detalles?",
-      "Estoy aquí cuando estés listo/a. 💼",
-    ],
-  };
-
-  // Select a random variation based on agent name
-  const variations =
-    followupVariations[agentName] || followupVariations.ClaudIA;
-  const randomVariation =
-    variations[Math.floor(Math.random() * variations.length)];
-
-  return randomVariation;
+export function generateFollowupMessage(agent: { followupMessages: string | null; language: string }): string {
+  const configured = (agent.followupMessages || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const variations = configured.length > 0 ? configured : DEFAULT_FOLLOWUPS[agent.language] || DEFAULT_FOLLOWUPS.en;
+  return variations[Math.floor(Math.random() * variations.length)];
 }
 
 /**

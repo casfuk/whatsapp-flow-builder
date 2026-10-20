@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { FlowEngine } from "@/lib/runtime-engine";
-import { sendAndPersistMessage } from "@/lib/whatsapp-message-service";
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 import { safeJson } from "@/lib/safe-response";
-import { internalAuthHeaders } from "@/lib/auth/session";
+import { startFlow } from "@/lib/flow/flow-runtime";
 
 /**
  * OPTIONS handler for CORS preflight
@@ -474,342 +472,28 @@ async function executeFlowForContact({
   chatId: string;
 }) {
   try {
-    // Generate session ID
-    const sessionId = `${phoneNumber}-${flowId}-${Date.now()}`;
-
-    console.log(`[Flow Execution] ========================================`);
-    console.log(`[Flow Execution] STARTING FLOW EXECUTION (Third-Party Trigger)`);
-    console.log(`[Flow Execution] Flow ID: ${flowId}`);
-    console.log(`[Flow Execution] Contact: ${phoneNumber} (${contactName})`);
-    console.log(`[Flow Execution] Contact ID: ${contactId}`);
-    console.log(`[Flow Execution] Device ID: ${deviceId}`);
-    console.log(`[Flow Execution] Session ID: ${sessionId}`);
-
-    // Create execution context with contact variables
-    const context = {
-      sessionId,
-      flowId,
-      variables: {
-        phone: phoneNumber,
-        name: contactName,
-        message: initialMessage,
-        contactId,
-      },
-    };
-
-    // Load flow
     const flow = await prisma.flow.findUnique({
       where: { id: flowId },
-      include: {
-        steps: true,
-        connections: true,
-      },
+      include: { steps: true, connections: true },
     });
-
     if (!flow) {
       console.error(`[Flow Execution] Flow not found: ${flowId}`);
       return;
     }
 
-    // Increment flow execution counter
-    await prisma.flow.update({
-      where: { id: flow.id },
-      data: {
-        executions: {
-          increment: 1,
-        },
-      },
+    // Shared runtime: same actions (incl. AI agent activation) as WhatsApp-triggered flows.
+    // The lead has not written yet, so an activated agent opens the conversation.
+    await startFlow({
+      flow,
+      phoneNumber,
+      contactId,
+      deviceId,
+      chatId,
+      inboundText: null,
+      variables: { name: contactName, message: initialMessage },
     });
-    console.log(`[Flow Execution] ✓ Flow execution counter incremented`);
-
-    // Find the start node
-    const startNode = flow.steps.find((s: any) => s.type === "start");
-    if (!startNode) {
-      console.error(`[Flow Execution] No start node found in flow "${flow.name}"`);
-      return;
-    }
-
-    // Initialize engine with chatId
-    const engine = new FlowEngine(flow, context.sessionId, context.variables, chatId);
-
-    console.log(`[Flow Execution] ✓ FlowEngine initialized`);
-    console.log(`[Flow Execution] Executing flow from start node ID: ${startNode.id}...`);
-
-    // Execute flow from start
-    const actions = await engine.executeFromStep(startNode.id);
-
-    console.log(`[Flow Execution] ✓ Flow execution complete. Generated ${actions.length} action(s)`);
-
-    // Process actions
-    for (let i = 0; i < actions.length; i++) {
-      const action = actions[i];
-      console.log(`[Flow Execution] ----------------------------------------`);
-      console.log(`[Flow Execution] Processing action ${i + 1}/${actions.length}: ${action.type}`);
-      console.log(`[Flow Execution] Action data:`, JSON.stringify(action, null, 2));
-
-      if (action.type === "send_whatsapp") {
-        console.log(`[Flow Execution]   → 📱 SENDING WHATSAPP MESSAGE`);
-        console.log(`[Flow Execution]   → To: ${action.to}`);
-        console.log(`[Flow Execution]   → Text: "${action.text}"`);
-        console.log(`[Flow Execution]   → Device ID: ${deviceId}`);
-
-        try {
-          console.log(`[Flow Execution]   → Calling sendAndPersistMessage...`);
-
-          await sendAndPersistMessage({
-            deviceId,
-            toPhoneNumber: action.to,
-            type: "text",
-            payload: { text: { body: action.text } },
-            sender: "flow",
-            textPreview: action.text,
-          });
-
-          console.log(`[Flow Execution]   → ✓ sendAndPersistMessage completed`);
-
-          // Also log to messageLog for backwards compatibility
-          await prisma.messageLog.create({
-            data: {
-              phone: action.to,
-              message: action.text,
-              status: "sent",
-            },
-          });
-
-          console.log(`[Flow Execution]   ✓ Message sent and persisted successfully`);
-        } catch (err: any) {
-          console.error(`[Flow Execution]   ✗ ERROR sending message:`, err);
-          console.error(`[Flow Execution]   ✗ Error message:`, err.message);
-          console.error(`[Flow Execution]   ✗ Error stack:`, err.stack);
-        }
-      } else if (action.type === "send_whatsapp_interactive") {
-        console.log(`[Flow Execution]   → send_whatsapp_interactive`);
-
-        try {
-          const messageText = action.interactive?.body?.text || "Interactive message";
-
-          await sendAndPersistMessage({
-            deviceId,
-            toPhoneNumber: action.to,
-            type: "interactive",
-            payload: { interactive: action.interactive },
-            sender: "flow",
-            textPreview: messageText,
-          });
-
-          await prisma.messageLog.create({
-            data: {
-              phone: action.to,
-              message: messageText,
-              status: "sent",
-            },
-          });
-
-          console.log(`[Flow Execution]   ✓ Interactive message sent and persisted`);
-        } catch (err) {
-          console.error(`[Flow Execution]   ✗ Error sending interactive message:`, err);
-        }
-      } else if (action.type === "send_whatsapp_media") {
-        console.log(`[Flow Execution]   → send_whatsapp_media`);
-        const { to, mediaId, mediaUrl, mediaType, caption, fileName } = action.data || {};
-
-        const hasMediaId = mediaId && mediaId !== "";
-        const hasMediaUrl = mediaUrl && mediaUrl !== "" && !mediaUrl.startsWith("blob:");
-
-        if (!to || !mediaType || (!hasMediaId && !hasMediaUrl)) {
-          console.error(`[Flow Execution]   ✗ Missing required media data`);
-          continue;
-        }
-
-        try {
-          let payload: any = {};
-          const actualType = mediaType === "media" ? "image" : mediaType;
-
-          if (actualType === "image") {
-            const imagePayload: any = {};
-            if (hasMediaId) imagePayload.id = mediaId;
-            else if (hasMediaUrl) imagePayload.link = mediaUrl;
-            if (caption) imagePayload.caption = caption;
-            payload.image = imagePayload;
-          } else if (actualType === "audio") {
-            const audioPayload: any = {};
-            if (hasMediaId) audioPayload.id = mediaId;
-            else if (hasMediaUrl) audioPayload.link = mediaUrl;
-            payload.audio = audioPayload;
-          } else if (actualType === "document") {
-            const documentPayload: any = {};
-            if (hasMediaId) documentPayload.id = mediaId;
-            else if (hasMediaUrl) documentPayload.link = mediaUrl;
-            if (caption) documentPayload.caption = caption;
-            if (fileName) documentPayload.filename = fileName;
-            payload.document = documentPayload;
-          }
-
-          await sendAndPersistMessage({
-            deviceId,
-            toPhoneNumber: to,
-            type: actualType as any,
-            payload,
-            sender: "flow",
-            textPreview: caption || `[${actualType}]`,
-          });
-
-          await prisma.messageLog.create({
-            data: {
-              phone: to,
-              message: `[${mediaType}] ${caption || "Media"}`,
-              status: "sent",
-            },
-          });
-
-          console.log(`[Flow Execution]   ✓ Media sent and persisted`);
-        } catch (err: any) {
-          console.error(`[Flow Execution]   ✗ Error sending media:`, err);
-        }
-      } else if (action.type === "assign_conversation") {
-        console.log(`[Flow Execution]   → 👤 ASSIGNING CONVERSATION`);
-        console.log(`[Flow Execution]   → Full action object:`, JSON.stringify(action, null, 2));
-        console.log(`[Flow Execution]   → Assignee ID: ${action.assigneeId}`);
-        console.log(`[Flow Execution]   → Session ID: ${action.sessionId}`);
-        console.log(`[Flow Execution]   → Phone number: ${phoneNumber}`);
-        console.log(`[Flow Execution]   → Device ID: ${deviceId}`);
-
-        try {
-          // Get the chat for this contact
-          console.log(`[Flow Execution]   → 🔍 Searching for chat with phoneNumber=${phoneNumber}, deviceId=${deviceId}`);
-          const chat = await prisma.chat.findFirst({
-            where: {
-              phoneNumber,
-              deviceId,
-            },
-            orderBy: { createdAt: "desc" },
-          });
-
-          if (!chat) {
-            console.error(`[Flow Execution]   ✗ ❌ NO CHAT FOUND for contact ${phoneNumber}`);
-            console.error(`[Flow Execution]   ✗ This means the chat wasn't created yet - this is the problem!`);
-            continue;
-          }
-
-          console.log(`[Flow Execution]   → ✅ Chat found: ${chat.id}`);
-          console.log(`[Flow Execution]   → Current chat state - assignedAgentType: ${chat.assignedAgentType}, assignedAgentId: ${chat.assignedAgentId}`);
-
-          // Check if assignee is an AI agent
-          console.log(`[Flow Execution]   → 🔍 Checking if assigneeId "${action.assigneeId}" is an AI agent...`);
-          const aiAgent = await prisma.aiAgent.findUnique({
-            where: { id: action.assigneeId },
-          });
-
-          if (aiAgent) {
-            console.log(`[Flow Execution]   → ✅ AI Agent found: ${aiAgent.name} (ID: ${aiAgent.id})`);
-            console.log(`[Flow Execution]   → 📝 About to UPDATE chat ${chat.id} with assignedAgentType="AI", assignedAgentId="${aiAgent.id}"`);
-
-            // Update chat to be assigned to AI agent
-            const updatedChat = await prisma.chat.update({
-              where: { id: chat.id },
-              data: {
-                assignedAgentType: "AI",
-                assignedAgentId: aiAgent.id,
-              },
-            });
-
-            console.log(`[Flow Execution]   → ✅✅✅ Chat UPDATE SUCCESSFUL!`);
-            console.log(`[Flow Execution]   → Updated chat state:`, JSON.stringify({
-              id: updatedChat.id,
-              assignedAgentType: updatedChat.assignedAgentType,
-              assignedAgentId: updatedChat.assignedAgentId,
-            }, null, 2));
-
-            // Trigger initial AI greeting
-            console.log(`[Flow Execution]   → Triggering initial AI greeting...`);
-            console.log(`[Flow Execution]   → Agent language: ${aiAgent.language}`);
-            console.log(`[Flow Execution]   → Agent tone: ${aiAgent.tone}`);
-            console.log(`[Flow Execution]   → Agent goal: ${aiAgent.goal || "N/A"}`);
-
-            try {
-              // Build initial greeting prompt that instructs the AI to introduce itself
-              const greetingPrompt = `You are starting a new conversation. Introduce yourself warmly and begin with your first question based on your objective. Keep it short (2-3 sentences maximum).`;
-
-              console.log(`[Flow Execution]   → Calling AI endpoint /api/ai-agent`);
-
-              // Call AI endpoint to generate initial greeting
-              const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/ai-agent`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...(await internalAuthHeaders()) },
-                body: JSON.stringify({
-                  agentId: aiAgent.id,
-                  userMessage: greetingPrompt,
-                  sessionId: chat.id,
-                }),
-              });
-
-              console.log(`[Flow Execution]   → AI API response status: ${aiResponse.status}`);
-
-              if (!aiResponse.ok) {
-                const errorText = await aiResponse.text();
-                console.error(`[Flow Execution]   ✗ AI API error response:`, errorText);
-                throw new Error(`AI API returned ${aiResponse.status}: ${errorText}`);
-              }
-
-              const aiData = await aiResponse.json();
-              const aiMessage = aiData.reply || "Hola, ¿cómo puedo ayudarte?";
-
-              console.log(`[Flow Execution]   → AI generated greeting: "${aiMessage}"`);
-
-              // Send AI greeting via WhatsApp
-              await sendAndPersistMessage({
-                deviceId,
-                toPhoneNumber: phoneNumber,
-                type: "text",
-                payload: { text: { body: aiMessage } },
-                sender: "agent",
-                textPreview: aiMessage,
-                chatId: chat.id,
-                agentId: aiAgent.id,
-              });
-
-              console.log(`[Flow Execution]   ✓ AI greeting sent successfully to ${phoneNumber}`);
-            } catch (aiError: any) {
-              console.error(`[Flow Execution]   ✗ Error generating/sending AI greeting:`, aiError);
-              console.error(`[Flow Execution]   ✗ AI Error message:`, aiError.message);
-              console.error(`[Flow Execution]   ✗ AI Error stack:`, aiError.stack);
-            }
-          } else {
-            // Regular human agent assignment
-            console.log(`[Flow Execution]   → ❌ AI agent NOT found with ID: ${action.assigneeId}`);
-            console.log(`[Flow Execution]   → Assuming human agent assignment`);
-            console.log(`[Flow Execution]   → 📝 About to UPDATE chat ${chat.id} with assignedAgentType="HUMAN", assignedAgentId="${action.assigneeId}"`);
-
-            const updatedChat = await prisma.chat.update({
-              where: { id: chat.id },
-              data: {
-                assignedAgentType: "HUMAN",
-                assignedAgentId: action.assigneeId,
-              },
-            });
-
-            console.log(`[Flow Execution]   → ✅ Chat UPDATE SUCCESSFUL (human agent)`);
-            console.log(`[Flow Execution]   → Updated chat state:`, JSON.stringify({
-              id: updatedChat.id,
-              assignedAgentType: updatedChat.assignedAgentType,
-              assignedAgentId: updatedChat.assignedAgentId,
-            }, null, 2));
-          }
-        } catch (err: any) {
-          console.error(`[Flow Execution]   ✗ ❌❌❌ ERROR ASSIGNING CONVERSATION:`, err);
-          console.error(`[Flow Execution]   ✗ Error name:`, err.name);
-          console.error(`[Flow Execution]   ✗ Error message:`, err.message);
-          console.error(`[Flow Execution]   ✗ Error stack:`, err.stack);
-        }
-      } else {
-        console.log(`[Flow Execution]   → Action type: ${action.type} (no handler)`);
-      }
-    }
-
-    console.log(`[Flow Execution] ========================================`);
-    console.log(`[Flow Execution] ✓✓✓ Flow "${flow.name}" executed successfully`);
-    console.log(`[Flow Execution] ========================================`);
+    console.log(`[Flow Execution] ✓ Flow "${flow.name}" executed for ${phoneNumber}`);
   } catch (error) {
-    console.error(`[Flow Execution] Error executing flow:`, error);
+    console.error(`[Flow Execution] Error executing flow:`, (error as Error)?.message);
   }
 }

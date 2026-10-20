@@ -8,15 +8,15 @@ datasource db {
 }
 
 model Flow {
-  id                 String               @id @default(cuid())
+  id                 String              @id @default(cuid())
   name               String
-  key                String               @unique
+  key                String              @unique
   description        String?
-  isActive           Boolean              @default(false)
+  isActive           Boolean             @default(false)
   startStepId        String?
-  executions         Int                  @default(0)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  executions         Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   connections        FlowConnection[]
   steps              FlowStep[]
   answers            FormAnswer[]
@@ -98,16 +98,16 @@ model DebugAction {
 }
 
 model Device {
-  id                    String               @id @default(cuid())
+  id                    String              @id @default(cuid())
   name                  String
-  color                 String               @default("#6D5BFA")
+  color                 String              @default("#6D5BFA")
   whatsappPhoneNumberId String?
   phoneNumber           String?
-  isConnected           Boolean              @default(false)
+  isConnected           Boolean             @default(false)
   accessToken           String?
   businessAccountId     String?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
   thirdPartyTriggers    ThirdPartyTrigger[]
 
   @@index([isConnected])
@@ -209,15 +209,15 @@ model FacebookPageConnection {
 }
 
 model FacebookPageIntegration {
-  id              String                     @id @default(cuid())
-  pageId          String                     @unique
+  id              String                   @id @default(cuid())
+  pageId          String                   @unique
   pageName        String
   pageAccessToken String
   defaultFlowId   String?
-  defaultTags     String                     @default("[]") // JSON array of tag names
+  defaultTags     String                   @default("[]") // JSON array of tag names
   userId          String? // Owner in FunnelChat
-  createdAt       DateTime                   @default(now())
-  updatedAt       DateTime                   @updatedAt
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
   leadFormConfigs FacebookLeadFormConfig[]
 
   @@index([pageId])
@@ -225,16 +225,16 @@ model FacebookPageIntegration {
 }
 
 model FacebookLeadFormConfig {
-  id                  String                   @id @default(cuid())
-  pageIntegrationId   String
-  formId              String
-  formName            String
-  flowId              String
-  tags                String                   @default("[]") // JSON array of tag names
-  isActive            Boolean                  @default(true)
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
-  pageIntegration     FacebookPageIntegration @relation(fields: [pageIntegrationId], references: [id], onDelete: Cascade)
+  id                String                  @id @default(cuid())
+  pageIntegrationId String
+  formId            String
+  formName          String
+  flowId            String
+  tags              String                  @default("[]") // JSON array of tag names
+  isActive          Boolean                 @default(true)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  pageIntegration   FacebookPageIntegration @relation(fields: [pageIntegrationId], references: [id], onDelete: Cascade)
 
   @@unique([pageIntegrationId, formId])
   @@index([pageIntegrationId])
@@ -338,21 +338,21 @@ model MassSend {
 }
 
 model ThirdPartyTrigger {
-  id                 String                       @id @default(cuid())
+  id                 String    @id @default(cuid())
   flowId             String
   deviceId           String
-  type               String                       @default("facebook_lead")
+  type               String    @default("facebook_lead")
   title              String?
-  fieldMapping       String                       @default("{}")
-  runOncePerContact  Boolean                      @default(false)
+  fieldMapping       String    @default("{}")
+  runOncePerContact  Boolean   @default(false)
   lastReceivedAt     DateTime?
   lastPayloadPreview String?
   lastPayloadSample  Json?
-  createdAt          DateTime                     @default(now())
-  updatedAt          DateTime                     @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  flow       Flow                            @relation(fields: [flowId], references: [id], onDelete: Cascade)
-  device     Device                          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  flow       Flow                         @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  device     Device                       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   executions ThirdPartyTriggerExecution[]
 
   @@index([flowId])
@@ -374,18 +374,34 @@ model ThirdPartyTriggerExecution {
 }
 
 model AiAgent {
-  id           String   @id @default(cuid())
-  name         String
-  description  String?
-  language     String   @default("es")
-  tone         String   @default("professional")
-  goal         String?
-  systemPrompt String   @db.Text
-  maxTurns     Int      @default(20) // Updated: increased from 10 to 20 for longer conversations
-  createdById  String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String?
+  language             String   @default("es")
+  tone                 String   @default("professional")
+  goal                 String?
+  systemPrompt         String   @db.Text
+  maxTurns             Int      @default(20) // Updated: increased from 10 to 20 for longer conversations
+  // Model / provider settings
+  provider             String   @default("openai")
+  model                String   @default("gpt-4o-mini")
+  temperature          Float    @default(0.7)
+  maxTokens            Int      @default(500)
+  // Business knowledge and behaviour rules (agent-specific, editable in the UI)
+  knowledge            String?  @db.Text
+  rules                String?  @db.Text
+  // Fallback when the AI provider fails
+  fallbackMessage      String?  @db.Text
+  // WhatsApp number notified on [[HANDOVER]] (falls back to the global admin number)
+  handoverPhone        String?
+  // Follow-ups when the contact stops replying
+  followupEnabled      Boolean  @default(true)
+  followupDelayMinutes Int      @default(2)
+  followupMessages     String?  @db.Text // one message per line
+  createdById          String?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([isActive])
   @@index([createdById])
@@ -418,14 +434,15 @@ model Chat {
   isFavorite            Boolean   @default(false)
   isResponding          Boolean   @default(false) // Prevents double AI responses during delays
   assignedToUserId      String?
-  assignedAgentType     String?   // "AI" or "HUMAN"
-  assignedAgentId       String?   // ID of AI agent or human agent (current agent)
+  assignedAgentType     String? // "AI" or "HUMAN"
+  assignedAgentId       String? // ID of AI agent or human agent (current agent)
   lastQuestionSentAt    DateTime? // When the last AI question was sent
   lastQuestionAttempts  Int       @default(0) // Number of times current question has been sent (max 2)
-  lastQuestionMessageId String?   // ID of the last question message sent
+  lastQuestionMessageId String? // ID of the last question message sent
   lastUserReplyAt       DateTime? // When user last replied (to detect if they responded)
   aiDisabled            Boolean   @default(false) // If true, AI and follow-ups are completely disabled for this chat
   perAgentTurnCount     String    @default("{}") // JSON: { "agentId": turnCount } - Tracks turns per agent separately
+  aiContextStartedAt    DateTime? // Start of the current AI agent's conversation segment (agents never see messages before it)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   messages              Message[]
@@ -446,12 +463,12 @@ model Chat {
 model Message {
   id        String   @id @default(cuid())
   chatId    String
-  sender    String   // "contact", "agent", "flow", "system"
+  sender    String // "contact", "agent", "flow", "system"
   text      String
   status    String   @default("sent")
   messageId String?
   metadata  String   @default("{}")
-  agentId   String?  // ID of the AI agent that sent this message (for agent-specific history)
+  agentId   String? // ID of the AI agent that sent this message (for agent-specific history)
   createdAt DateTime @default(now())
   chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 

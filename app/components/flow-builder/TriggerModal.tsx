@@ -423,6 +423,15 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
+                          checked={matchMode === "starts_with"}
+                          onChange={() => setMatchMode("starts_with")}
+                          className="w-4 h-4 text-[#6D5BFA]"
+                        />
+                        <span className="text-sm text-gray-700">Empieza por</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
                           checked={matchMode === "exact"}
                           onChange={() => setMatchMode("exact")}
                           className="w-4 h-4 text-[#6D5BFA]"
@@ -439,6 +448,11 @@ export function TriggerModal({ trigger, onSave, onClose }: TriggerModalProps) {
                         <span className="text-sm text-gray-700">Todos</span>
                       </label>
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Si varios flujos coinciden se inicia solo uno (exacto &gt; empieza por &gt; contiene &gt; todos).
+                      Si la conversación tiene un agente IA activo, solo la interrumpe un mensaje que sea exactamente
+                      una de las palabras clave.
+                    </p>
                   </div>
 
                   {/* Keywords textarea */}

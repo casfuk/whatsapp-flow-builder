@@ -95,6 +95,24 @@ export function validateFlow(nodes: Node[], edges: Edge[]): ValidationResult {
     }
   });
 
+  // AI agent actions and conditions
+  nodes.forEach((node) => {
+    if (node.type === "ai_agent" && node.data.aiAction !== "stop" && !node.data.agentId) {
+      errors.push({
+        type: "error",
+        message: "Agente IA: elige qué agente activar",
+        nodeId: node.id,
+      });
+    }
+    if (node.type === "condition" && (!Array.isArray(node.data.conditions) || node.data.conditions.length === 0)) {
+      errors.push({
+        type: "error",
+        message: "Condición: configura al menos una condición",
+        nodeId: node.id,
+      });
+    }
+  });
+
   // Validate message nodes
   nodes.forEach((node) => {
     if (node.type === "send_message") {

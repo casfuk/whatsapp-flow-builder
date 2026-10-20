@@ -1,6 +1,6 @@
 export type TriggerType = 'none' | 'message_received' | 'tag_added' | 'third_party';
 
-export type MatchMode = 'contains' | 'exact' | 'all';
+export type MatchMode = 'contains' | 'starts_with' | 'exact' | 'all';
 
 export interface TagAddedTrigger {
   id: string;
@@ -16,7 +16,7 @@ export interface MessageReceivedTrigger {
   name: string;
   type: 'message_received';
   deviceId: string | null;
-  matchMode: MatchMode;     // 'contains' | 'exact' | 'all'
+  matchMode: MatchMode;     // 'contains' | 'starts_with' | 'exact' | 'all'
   keywords: string[];       // list of phrases
   oncePerContact: boolean;
   smartTrigger?: boolean;   // IA Disparador Inteligente

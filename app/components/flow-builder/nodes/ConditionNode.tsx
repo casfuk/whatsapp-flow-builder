@@ -1,6 +1,6 @@
 import { Handle, Position, NodeProps } from "reactflow";
 import { useState } from "react";
-import { ConditionModal, Condition } from "@/app/components/condition/ConditionModal";
+import { ConditionModal, Condition, describeCondition } from "@/app/components/condition/ConditionModal";
 
 export function ConditionNode({ data, selected, id }: NodeProps) {
   const [showConditionModal, setShowConditionModal] = useState(false);
@@ -18,11 +18,7 @@ export function ConditionNode({ data, selected, id }: NodeProps) {
     }
 
     if (conditions.length === 1) {
-      const c = conditions[0];
-      const typeLabel =
-        c.type === "tag" ? "Tag" : c.type === "weekday" ? "Día" : "Hora";
-      const operatorLabel = c.operator === "is" ? "es" : "no es";
-      return `${typeLabel} ${operatorLabel} "${c.value}"`;
+      return describeCondition(conditions[0]);
     }
 
     return `${conditions.length} condiciones configuradas`;

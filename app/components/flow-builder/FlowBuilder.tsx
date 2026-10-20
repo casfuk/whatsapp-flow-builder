@@ -30,6 +30,7 @@ import { PlaceholderNode } from "./nodes/PlaceholderNode";
 import { StartAutomationNode } from "./nodes/StartAutomationNode";
 import { RotatorNode } from "./nodes/RotatorNode";
 import { AssignConversationNode } from "./nodes/AssignConversationNode";
+import { AiAgentNode } from "./nodes/AiAgentNode";
 import { validateFlow, ValidationResult, ValidationError } from "@/lib/utils/flowValidation";
 
 const nodeTypes: NodeTypes = {
@@ -46,6 +47,7 @@ const nodeTypes: NodeTypes = {
   start_automation: StartAutomationNode,
   template: DefaultNode,
   assign_ai_agent: DefaultNode,
+  ai_agent: AiAgentNode,
   placeholder: PlaceholderNode,
 };
 
@@ -164,7 +166,9 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     );
   }, [setNodes]);
 
-  const handleReplaceNode = useCallback((placeholderNodeId: string, newNodeType: string) => {
+  const handleReplaceNode = useCallback((placeholderNodeId: string, requestedType: string) => {
+    // "ai_agent:stop" = AI agent node preset to the "stop" action
+    const [newNodeType, aiPreset] = requestedType.split(":");
     setNodes((nds) => {
       const placeholderNode = nds.find(n => n.id === placeholderNodeId);
       if (!placeholderNode) return nds;
@@ -203,6 +207,8 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
         nodeData = { ...baseData, waitConfig: { timeBetweenSeconds: 60 } };
       } else if (newNodeType === "condition") {
         nodeData = { ...baseData, conditions: [] };
+      } else if (newNodeType === "ai_agent") {
+        nodeData = { ...baseData, aiAction: aiPreset || "activate", respondNow: true, resetContext: true };
       }
 
       // Replace the placeholder node with the new node
@@ -295,8 +301,8 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
             );
           }
         }),
-        // Add onChange handler for assign_conversation nodes
-        ...(n.type === 'assign_conversation' && {
+        // Add onChange handler for assign_conversation and ai_agent nodes
+        ...((n.type === 'assign_conversation' || n.type === 'ai_agent') && {
           onChange: (partial: any) => {
             setNodes((nds) =>
               nds.map((node) =>
@@ -424,7 +430,8 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     );
   }, [setNodes]);
 
-  const addNode = (type: string, label: string, position?: { x: number; y: number }) => {
+  const addNode = (requestedType: string, label: string, position?: { x: number; y: number }) => {
+    const [type, aiPreset] = requestedType.split(":");
     const baseData = {
       label,
       config: { type },
@@ -461,6 +468,8 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       nodeData = { ...baseData, waitConfig: { timeBetweenSeconds: 60 } };
     } else if (type === "condition") {
       nodeData = { ...baseData, conditions: [] };
+    } else if (type === "ai_agent") {
+      nodeData = { ...baseData, aiAction: aiPreset || "activate", respondNow: true, resetContext: true };
     }
 
     const newNode: Node = {
@@ -472,8 +481,9 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     setNodes((nds) => [...nds, newNode]);
   };
 
-  const handleAddNode = useCallback((nodeType: string) => {
+  const handleAddNode = useCallback((requestedType: string) => {
     if (!selectedNode) return;
+    const [nodeType, aiPreset] = requestedType.split(":");
 
     const newId = `node-${Date.now()}`;
     const position = {
@@ -517,6 +527,8 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       nodeData = { ...baseData, waitConfig: { timeBetweenSeconds: 60 } };
     } else if (nodeType === "condition") {
       nodeData = { ...baseData, conditions: [] };
+    } else if (nodeType === "ai_agent") {
+      nodeData = { ...baseData, aiAction: aiPreset || "activate", respondNow: true, resetContext: true };
     }
 
     setNodes((nds) => nds.concat({
@@ -583,7 +595,8 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
     [project, connectionSource, handleReplaceNode, handleDeleteNode, handleDuplicateNode, setNodes, setEdges]
   );
 
-  const handleAddNodeFromMenu = (type: string, label: string) => {
+  const handleAddNodeFromMenu = (requestedType: string, label: string) => {
+    const [type, aiPreset] = requestedType.split(":");
     const newId = `node-${Date.now()}`;
 
     const baseData = {
@@ -622,6 +635,8 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
       nodeData = { ...baseData, waitConfig: { timeBetweenSeconds: 60 } };
     } else if (type === "condition") {
       nodeData = { ...baseData, conditions: [] };
+    } else if (type === "ai_agent") {
+      nodeData = { ...baseData, aiAction: aiPreset || "activate", respondNow: true, resetContext: true };
     }
 
     const newNode: Node = {
@@ -799,6 +814,12 @@ const FlowBuilder = forwardRef<FlowBuilderRef, FlowBuilderProps>(function FlowBu
                 className="px-3 py-2 text-sm text-left bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors"
               >
                 🔀 Condición
+              </button>
+              <button
+                onClick={() => handleAddNodeFromMenu("ai_agent:activate", "Agente IA")}
+                className="px-3 py-2 text-sm text-left bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors"
+              >
+                🤖 Agente IA
               </button>
               <button
                 onClick={() => setAddMenu(initialMenu)}

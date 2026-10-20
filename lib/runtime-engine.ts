@@ -1,11 +1,20 @@
 import { prisma } from "./prisma";
 import { Action } from "./runtime-types";
+import { evaluateConditions } from "./flow/conditions";
 
 interface RuntimeContext {
   sessionId: string;
   flowId: string;
   variables: Record<string, any>;
   chatId?: string; // Optional chat ID for updating Chat record
+}
+
+interface AiAgentStepConfig {
+  aiAction?: "activate" | "change" | "stop";
+  agentId?: string | null;
+  respondNow?: boolean;
+  resetContext?: boolean;
+  stopMessage?: string;
 }
 
 interface StepExecutionResult {
@@ -425,6 +434,11 @@ export class RuntimeEngine {
                 assignedAgentType: "AI",
                 assignedAgentId: resolvedAssigneeId,
                 assignedToUserId: null,
+                aiDisabled: false,
+                // Same context isolation as the "AI agent" action
+                aiContextStartedAt: this.context.variables.sessionStartedAt
+                  ? new Date(this.context.variables.sessionStartedAt)
+                  : new Date(),
               },
             });
             console.log(`[RuntimeEngine] ✅✅✅ Chat record updated successfully!`);
@@ -489,14 +503,24 @@ export class RuntimeEngine {
           shouldStop: false,
         };
 
-      case "condition":
+      case "condition": {
+        // Flow builder format: conditions[] + output handles "cumple" / "no_cumple"
+        if (Array.isArray(config.conditions)) {
+          const met = await evaluateConditions(config.conditions, {
+            message: this.context.variables.lastReply ?? this.context.variables.message,
+            contactId: this.context.variables.contactId,
+            phone: this.context.variables.phone,
+          });
+          console.log(`[RuntimeEngine] Condition ${step.id}: ${met ? "cumple" : "no cumple"}`);
+          return { actions: [], nextStepId: this.getBranchStepId(step.id, met), shouldStop: false };
+        }
+        // Legacy format: variable/operator/value + "true"/"false" labels
         const conditionMet = this.evaluateCondition(config);
-        const nextStepId = this.getConditionalNextStep(step.id, conditionMet);
-        return {
-          actions: [],
-          nextStepId,
-          shouldStop: false,
-        };
+        return { actions: [], nextStepId: this.getConditionalNextStep(step.id, conditionMet), shouldStop: false };
+      }
+
+      case "ai_agent":
+        return this.executeAiAgentStep(step, config);
 
       case "template":
         const templateMessage = this.interpolateVariables(config.template || "");
@@ -576,6 +600,85 @@ export class RuntimeEngine {
       (conn) => conn.fromStepId === currentStepId
     );
     return connection ? connection.toStepId : null;
+  }
+
+  /** Next step for a yes/no branch. An unconnected branch ends the flow (never falls through to the other branch). */
+  private getBranchStepId(currentStepId: string, conditionMet: boolean): string | null {
+    const handles = conditionMet ? ["cumple", "true", "yes"] : ["no_cumple", "false", "no"];
+    const connection = this.connections.find(
+      (conn) =>
+        conn.fromStepId === currentStepId &&
+        (handles.includes(conn.sourceHandle) || handles.includes(conn.conditionLabel))
+    );
+    return connection ? connection.toStepId : null;
+  }
+
+  /**
+   * "AI agent" flow action: activate, change or stop the AI agent that handles
+   * this conversation. The flow decides which agent; the agent's own record
+   * holds its personality, knowledge and settings.
+   */
+  private async executeAiAgentStep(step: { id: string }, config: AiAgentStepConfig): Promise<StepExecutionResult> {
+    const next = { nextStepId: this.getNextStepId(step.id), shouldStop: false };
+    const mode: "activate" | "change" | "stop" = config.aiAction === "stop" || config.aiAction === "change" ? config.aiAction : "activate";
+    const chatId = this.context.chatId;
+
+    if (!chatId) {
+      console.warn(`[RuntimeEngine] ai_agent step ${step.id}: no chat for this session - skipped`);
+      return { actions: [], ...next };
+    }
+
+    if (mode === "stop") {
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: {
+          assignedAgentType: null,
+          assignedAgentId: null,
+          lastQuestionSentAt: null,
+          lastQuestionAttempts: 0,
+          lastQuestionMessageId: null,
+        },
+      });
+      const message = config.stopMessage ? this.interpolateVariables(String(config.stopMessage)) : "";
+      return {
+        actions: message ? [{ type: "send_whatsapp", to: this.context.variables.phone, text: message }] : [],
+        ...next,
+      };
+    }
+
+    const agent = config.agentId
+      ? await prisma.aiAgent.findUnique({ where: { id: config.agentId }, select: { id: true, name: true, isActive: true } })
+      : null;
+    if (!agent || !agent.isActive) {
+      console.warn(`[RuntimeEngine] ai_agent step ${step.id}: agent ${config.agentId || "(none)"} missing or inactive - skipped`);
+      return { actions: [], ...next };
+    }
+
+    // New context segment unless the flow explicitly keeps the previous one.
+    // It starts at the message that started this flow, so the agent sees this
+    // flow's exchange but nothing from earlier agents/businesses.
+    const keepContext = mode === "change" && config.resetContext === false;
+    const segmentStart = this.context.variables.sessionStartedAt ? new Date(this.context.variables.sessionStartedAt) : new Date();
+
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: {
+        assignedAgentType: "AI",
+        assignedAgentId: agent.id,
+        assignedToUserId: null,
+        aiDisabled: false,
+        lastQuestionSentAt: null,
+        lastQuestionAttempts: 0,
+        lastQuestionMessageId: null,
+        ...(keepContext ? {} : { aiContextStartedAt: segmentStart }),
+      },
+    });
+    console.log(`[RuntimeEngine] AI agent ${mode}: ${agent.name} (${agent.id}) for chat ${chatId}`);
+
+    return {
+      actions: [{ type: "ai_agent", mode, agentId: agent.id, respondNow: config.respondNow !== false }],
+      ...next,
+    };
   }
 
   private getConditionalNextStep(currentStepId: string, conditionMet: boolean): string | null {

@@ -332,92 +332,25 @@ async function processLeadgenEvent(eventData: any) {
 
     console.log("[Facebook Leadgen] ✓ Chat created/updated:", chat.id);
 
-    // Increment flow execution counter
-    await prisma.flow.update({
-      where: { id: flow.id },
-      data: {
-        executions: {
-          increment: 1,
-        },
-      },
-    });
-
-    // Import FlowEngine dynamically to execute the flow
-    const { FlowEngine } = await import("@/lib/runtime-engine");
-
-    // Find the start node
-    const startNode = flow.steps.find((s: any) => s.type === "start");
-    if (!startNode) {
-      console.error("[Facebook Leadgen] No start node found in flow");
-      return;
-    }
-
-    // Generate session ID
-    const sessionId = `${contact.phone}-${flow.id}-${Date.now()}`;
-
-    // Initialize engine
-    const engine = new FlowEngine(
+    // Shared runtime: same actions (incl. AI agent activation) as WhatsApp-triggered flows.
+    // The lead has not written yet, so an activated agent opens the conversation.
+    const { startFlow } = await import("@/lib/flow/flow-runtime");
+    await startFlow({
       flow,
-      sessionId,
-      {
-        phone: contact.phone,
+      phoneNumber: contact.phone,
+      contactId: contact.id,
+      deviceId: device.id,
+      chatId: chat.id,
+      inboundText: null,
+      variables: {
         name: contact.name || name || "Lead",
         email: email || "",
-        contactId: contact.id,
         leadgen_id,
         page_id,
         form_id,
         ...customFields,
       },
-      chat.id
-    );
-
-    console.log("[Facebook Leadgen] ✓ FlowEngine initialized");
-    console.log("[Facebook Leadgen] Executing flow from start node...");
-
-    // Execute flow from start
-    const actions = await engine.executeFromStep(startNode.id);
-
-    console.log(`[Facebook Leadgen] ✓ Flow execution complete. Generated ${actions.length} action(s)`);
-
-    // Process actions (send WhatsApp messages, etc.)
-    const { sendAndPersistMessage } = await import("@/lib/whatsapp-message-service");
-
-    for (const action of actions) {
-      if (action.type === "send_whatsapp") {
-        console.log("[Facebook Leadgen] Sending WhatsApp message to", action.to);
-        try {
-          await sendAndPersistMessage({
-            deviceId: device.id,
-            toPhoneNumber: action.to,
-            type: "text",
-            payload: { text: { body: action.text } },
-            sender: "flow",
-            textPreview: action.text,
-          });
-          console.log("[Facebook Leadgen] ✓ Message sent successfully");
-        } catch (err) {
-          console.error("[Facebook Leadgen] ✗ Error sending message:", err);
-        }
-      } else if (action.type === "send_whatsapp_interactive") {
-        console.log("[Facebook Leadgen] Sending interactive WhatsApp message");
-        try {
-          const messageText = action.interactive?.body?.text || "Interactive message";
-          await sendAndPersistMessage({
-            deviceId: device.id,
-            toPhoneNumber: action.to,
-            type: "interactive",
-            payload: { interactive: action.interactive },
-            sender: "flow",
-            textPreview: messageText,
-          });
-          console.log("[Facebook Leadgen] ✓ Interactive message sent");
-        } catch (err) {
-          console.error("[Facebook Leadgen] ✗ Error sending interactive message:", err);
-        }
-      }
-      // Add more action handlers as needed
-    }
+    });
 
     console.log("[Facebook Leadgen] ✓ Flow triggered successfully");
 
